@@ -1,0 +1,117 @@
+---
+title: "Fig.4b & Fig.S5c_Gene richness per genome in control experiment"
+author: "Huanhuan Zhu"
+date: "2025-09-25"
+output: html_document
+---
+
+## Fig.4b_mgPGPT gene richness per genome
+```{r, fig.align='center', fig.height=6, fig.width=6, warning=FALSE, message=FALSE}
+
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+
+rm(list=ls())
+
+genome_equ <- read.table("E:/HMME/Metagenome/Result_new/genomesize/output_genome_equivalents.txt")
+PGPT <- read.table("E:/HMME/Metagenome/Result_new/mgPGPT/mgPGPT.summarizeAbundance.count.sseqid.raw.txt", check.names = F, header = T, row.names = 1)
+
+PGPT_z <- PGPT[, grepl("TS",colnames(PGPT))]
+PGPT_z[PGPT_z >0] = 1
+PGPT_z_df <- as.data.frame(colSums(PGPT_z))
+PGPT_z_df$generation <- as.numeric(substr(rownames(PGPT_z_df),1,1))
+
+names(PGPT_z_df)[1] = "Richness"
+
+
+PGPT_z_df$id <- gsub("\\.quant$", "", rownames(PGPT_z_df))
+PGPT_z_df <- left_join(PGPT_z_df, genome_equ, by = c("id" = "V1"))
+PGPT_z_df$Richness_adj <- PGPT_z_df$Richness/PGPT_z_df$V2
+
+colors <- c("#1b9e77",
+            "#3B3B98",
+            "#984ea3",
+            "#FFD700",
+            "#FF7F00",
+            "#e41a1c",
+            "#8c510a")
+
+pgpt <- ggplot(PGPT_z_df, aes(x = generation, y = Richness_adj)) + 
+  geom_point(size = 6, shape = 21, alpha = 0.8, fill = "dimgray") +
+  geom_smooth(method = "lm", color ="red", linewidth = 4) +
+  #scale_fill_manual(name = "Generation", values = colors) +
+  labs(title = "mgPGPT", x="Generation", y = "Gene richness per genome") +
+  scale_x_continuous(breaks = 0:6) +
+  stat_cor(method = "spearman", label.x.npc = "right", label.y.npc = "top",hjust = 1, size = 8) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 30, hjust = 0.5),
+    axis.text = element_text(size=22, angle = 0, hjust = 1, color = "black"),
+    strip.text = element_text(size=26),
+    axis.title = element_text(size=26),
+    legend.key.height = unit(0.5, "cm"), 
+    legend.key.width = unit(0.3, "cm"), 
+    legend.title = element_text(size = 26), 
+    legend.text = element_text(size = 22) 
+  )
+
+# 600 600
+pgpt
+
+```
+
+
+## Fig.S5c_mgPGPT gene richness per genome
+```{r, fig.align='center', fig.height=6, fig.width=5.5, warning=FALSE, message=FALSE}
+
+rm(list=ls())
+
+genome_equ <- read.table("E:/HMME/Metagenome/Result_new/genomesize/output_genome_equivalents.txt")
+KO <- read.table("E:/HMME/Metagenome/Result_new/eggnog/eggnog.summarizeAbundance.count.KEGG_ko.raw.txt", check.names = F, header = T, row.names = 1)
+
+
+KO <- KO[2:nrow(KO),]
+KO_z <- KO[, grepl("T",colnames(KO))]
+KO_z[KO_z >0] = 1
+KO_z_df <- as.data.frame(colSums(KO_z))
+KO_z_df$generation <- as.numeric(substr(rownames(KO_z_df),1,1))
+
+names(KO_z_df)[1] = "Richness"
+KO_z_df$id <- gsub("\\.quant$", "", rownames(KO_z_df))
+KO_z_df <- left_join(KO_z_df, genome_equ, by = c("id" = "V1"))
+KO_z_df$Richness_adj <- KO_z_df$Richness/KO_z_df$V2
+
+colors <- c("#1b9e77",
+            "#3B3B98",
+            "#984ea3",
+            "#FFD700",
+            "#FF7F00",
+            "#e41a1c",
+            "#8c510a")
+
+kegg <- ggplot(KO_z_df, aes(x = generation, y = Richness_adj)) + 
+  geom_point(aes(fill = factor(generation)), size = 5, shape = 21, alpha = 0.8) +
+  geom_smooth(method = "lm", color ="red", linewidth = 2) +
+  scale_fill_manual(name = "Generation", values = colors) +
+  labs(title = "KEGG", x="Generation", y = "Gene richness per genome") +
+  scale_x_continuous(breaks = 0:6) +
+  stat_cor(method = "spearman", label.x.npc = "right", label.y.npc = "top",hjust = 1, size = 8) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 30, hjust = 0.5),
+    axis.text = element_text(size=22, angle = 0, hjust = 1, color = "black"),
+    strip.text = element_text(size=26),
+    axis.title = element_text(size=26),
+    legend.position = "bottom",
+    legend.key.height = unit(0.5, "cm"), 
+    legend.key.width = unit(0.3, "cm"), 
+    legend.title = element_text(size = 26),
+    legend.text = element_text(size = 22) 
+  )
+
+kegg
+
+#w550 h600
+
+```

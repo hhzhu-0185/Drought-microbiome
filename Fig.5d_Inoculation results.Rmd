@@ -1,0 +1,176 @@
+---
+title: "Fig.5d_Inoculation results"
+author: "Huanhuan Zhu"
+date: "2025-10-09"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=5.75, fig.width=11.0, warning=FALSE, message=FALSE}
+
+#############################Fig.5d_Inoculation results##########################
+
+library(patchwork)
+library(tibble)
+library(reshape2)
+library(ggpubr)
+library(agricolae) # kruskal for nonparametric test
+library(ggh4x)  # set individual y axis for facet
+library(ggplot2)
+library(tidyverse)
+library(ggsignif)
+library(rstatix)
+
+
+rm (list=ls())
+
+inoculation <- read.csv("E:/HMME/Syncom/HMME-results.csv") 
+
+inoculation2 <- aggregate(.~Treatment+Number+Group+Isolate, inoculation[,c(2:10)], FUN="mean")
+inoculation2$Treatment <- as.factor(inoculation2$Treatment)
+inoculation2$Number <- as.factor(inoculation2$Number)
+
+
+result <- with(inoculation2, kruskal(fresh.shoot.height,Treatment,p.adj="fdr",main = "treatment") )
+
+result
+
+df <- as.data.frame(result$groups)
+df$id <- rownames(df)
+
+df2 <- result$means
+df2$id <- rownames(df2)
+
+df <- left_join(df, df2, by="id")
+df <- left_join(df, inoculation2[,c("Treatment","Group")],by=c("id"="Treatment"))
+df[df$id == 'T_all',]$Max = 53.5
+
+inoculation2$Group <- factor(inoculation2$Group, levels = c("Bacteria","Fungi","F&B","CK"))
+inoculation2$Treatment <- factor(inoculation2$Treatment, c("CK","B_14","B_26","B_28","B_29","B_all","T_2","T_10","T_14","T_all","BT_all"))
+inoculation2$Isolate <- factor(inoculation2$Isolate, c("CK","Bacillus drentensis","Bacillus cereus","Bacillus butanolivorans","Bacillus safensis","All Bacillus",
+                                                       "Trichoderma ghanense","Trichoderma asperellum","Trichoderma orientale","All Trichoderma","All"))
+
+kruskal_res <- kruskal.test(fresh.shoot.height ~ Isolate, data = inoculation2)
+
+
+chi_sq <- round(kruskal_res$statistic, 2)
+p_val  <- kruskal_res$p.value
+df_new <- kruskal_res$parameter
+
+label_text <- sprintf("chi^2 * '(' * 'df = %d' * ')' == %g * ',' ~ italic(p) == %s", 
+                      df_new, signif(chi_sq, 3), signif(p_val, 3))
+
+
+set.seed(325)
+height <- ggplot(inoculation2, aes(x = factor(Treatment), y=fresh.shoot.height, fill = Group))+
+  geom_boxplot(width=0.7, alpha=0.8) +
+  scale_fill_manual(name = "Treatment", 
+                    values = c("#1445f8","#c00000","#ff7f00","#7f7f7f"), 
+                    labels = c(
+                      'Bacteria' = "Bacillus",
+                      'Fungi' = "Trichoderma",
+                      'F&B' = "Bacillus & Trichoderma",
+                      'CK' = "Control"
+                    )) +
+  scale_color_manual(name = "Treatment", 
+                     values = c("#1445f8","#c00000","#ff7f00","#7f7f7f"), 
+                     labels = c(
+                       'Bacteria' = "Bacillus",
+                       'Fungi' = "Trichoderma",
+                       'F&B' = "Bacillus & Trichoderma",
+                       'CK' = "Control"
+                     )) +
+  scale_x_discrete(labels = c("CK"="CK","B_14"="14","B_26"="26","B_28"="28","B_29"="29","B_all"="B_all",
+                              "T_2"="2","T_10"="10","T_14"="14","T_all"="T_all","BT_all"="All")) +
+  labs(x = NULL, title = "Shoot height (cm)") +
+  ylim(41,61) +
+  ggplot2::annotate("text", x = "B_26", y = 60, label = label_text, hjust = 0.2, size = 8, parse = TRUE) +
+  geom_text(data=df, aes(label = groups, x=id, y=Max), vjust = -0.8, size = 8) +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 30, hjust = 0.5),
+        axis.title.y = element_blank(), 
+        axis.title.x = element_text(color = "black", size = 26),
+        axis.text.x = element_text(color = "black", size = 22, angle = 90, hjust = 1, vjust=0.5),
+        axis.text.y = element_text(color = "black", size = 22),
+        legend.title = element_text(color = "black", size = 26),
+        legend.text = element_text(color = "black", size = 22),
+        strip.text = element_text(color = "black",size = 22),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+height
+
+
+#
+result <- with(inoculation2, kruskal(dry.shoot.weight,Treatment,p.adj="fdr",main = "treatment") )
+
+result
+
+df <- as.data.frame(result$groups)
+df$id <- rownames(df)
+
+df2 <- result$means
+df2$id <- rownames(df2)
+
+df <- left_join(df, df2, by="id")
+df <- left_join(df, inoculation2[,c("Treatment","Group")],by=c("id"="Treatment"))
+inoculation2$Group <- factor(inoculation2$Group, levels = c("Bacteria","Fungi","F&B","CK"))
+inoculation2$Treatment <- factor(inoculation2$Treatment, c("CK","B_14","B_26","B_28","B_29","B_all","T_2","T_10","T_14","T_all","BT_all"))
+inoculation2$Isolate <- factor(inoculation2$Isolate, c("CK","Bacillus drentensis","Bacillus cereus","Bacillus butanolivorans","Bacillus safensis","All Bacillus",
+                                                       "Trichoderma ghanense","Trichoderma asperellum","Trichoderma orientale","All Trichoderma","All"))
+
+kruskal_res <- kruskal.test(dry.shoot.weight ~ Isolate, data = inoculation2)
+
+chi_sq <- round(kruskal_res$statistic, 2)
+p_val  <- kruskal_res$p.value
+df_new <- kruskal_res$parameter
+
+label_text <- sprintf("chi^2 * '(' * 'df = %d' * ')' == %g * ',' ~ italic(p) == %s", 
+                      df_new, signif(chi_sq, 3), signif(p_val, 3))
+
+
+
+set.seed(325)
+dry_shoot_weight <- ggplot(inoculation2, aes(x=Treatment, y=dry.shoot.weight, fill = Group))+
+  geom_boxplot(width=0.7, alpha=0.8) +
+  scale_fill_manual(name = "Treatment", 
+                    values = c("#1445f8","#c00000","#ff7f00","#7f7f7f"), 
+                    labels = c(
+                      'Bacteria' = "Bacillus",
+                      'Fungi' = "Trichoderma",
+                      'F&B' = "Bacillus & Trichoderma",
+                      'CK' = "Control"
+                    )) +
+  scale_color_manual(name = "Treatment", 
+                     values = c("#1445f8","#c00000","#ff7f00","#7f7f7f"), 
+                     labels = c(
+                       'Bacteria' = "Bacillus",
+                       'Fungi' = "Trichoderma",
+                       'F&B' = "Bacillus & Trichoderma",
+                       'CK' = "Control"
+                     )) +
+  scale_x_discrete(labels = c("CK"="CK","B_14"="14","B_26"="26","B_28"="28","B_29"="29","B_all"="B_all",
+                              "T_2"="2","T_10"="10","T_14"="14","T_all"="T_all","BT_all"="All")) +
+  labs(x = NULL, title = "Dry shoot weight (g)") +
+  ylim(0.35,0.85) +
+  ggplot2::annotate("text", x = "B_26", y = 0.825, label = label_text, hjust = 0.2, size = 8, parse = TRUE) +
+  geom_text(data=df, aes(label = groups, x=id, y=Max), vjust = -0.8, size = 8) +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 30, hjust = 0.5),
+        axis.title.y = element_blank(), 
+        axis.title.x = element_text(color = "black", size = 26),
+        axis.text.x = element_text(color = "black", size = 22, angle = 90, hjust = 1, vjust=0.5),
+        axis.text.y = element_text(color = "black", size = 22),
+        legend.title = element_text(color = "black", size = 26),
+        legend.text = element_text(color = "black", size = 22),
+        strip.text = element_text(color = "black",size = 22),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+dry_shoot_weight
+
+
+p <- (height|dry_shoot_weight) + plot_layout(guides = "collect") & theme(legend.position = "none") 
+print(p)
+
+# 1100 575
+```

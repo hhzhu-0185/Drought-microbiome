@@ -1,0 +1,449 @@
+---
+title: "Fig.4c_MAG_mgPGPT_tree"
+author: "Huanhuan Zhu"
+date: "2025-09-25"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=12, fig.width=16, warning=FALSE, message=FALSE}
+
+#############################Fig.4c_MAG_mgPGPT_tree##########################
+
+library(ggtree)
+library(ape)
+library(ggtreeExtra)
+library(ggnewscale)
+library(scales)
+library(agricolae)
+library(ggnewscale)
+library(tidyverse)
+library(data.table)
+library(edgeR)
+
+rm(list=ls())
+
+#  Change direction of MAG 
+mag_abundance <- read.table("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/coverm_prokaryotes/all_bin_coverages_TR_count.tsv",
+                            sep = "\t", header = T, check.names = F, row.names = 1)
+
+mag_abundance <- as.data.frame(t(mag_abundance))
+
+
+
+metadata <- data.frame("id" = rownames(mag_abundance), "group" = substr(rownames(mag_abundance),1,1))
+metadata <- column_to_rownames(metadata, "id")
+
+mag_abundance <- as.data.frame(t(mag_abundance))
+
+
+dge <- DGEList(counts = mag_abundance, group = metadata$group)
+
+keep <- filterByExpr(dge)
+dge <- dge[keep,, keep.lib.sizes=FALSE]
+
+dge <- calcNormFactors(dge, method = "TMM")
+
+plotMDS(dge, dim = c(1, 2))
+
+design <- model.matrix(~ metadata$group)
+
+dge <- estimateDisp(dge, design, robust = TRUE) 
+
+plotBCV(dge)
+
+fit <- glmFit(dge, design, robust = TRUE)
+lrt <- glmLRT(fit)
+
+res <- topTags(lrt, n = Inf)
+res_df <- res$table
+res_df$KO <- rownames(res_df)
+
+
+res_sig <- res_df[res_df$FDR < 0.05 , ]
+
+
+# MAG information and PGPT information
+
+mag_info <- read.table("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/checkm2/quality_report.tsv", sep = "\t", header = T)
+
+mag_taxa <- read.table("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/gtdbtk_skip_ani/gtdbtk.bac120.summary.tsv", sep = "\t", header = T)
+mag_taxa <- mag_taxa %>% 
+  #filter(user_genome %in% mag_tree_filtered$tip.label,) %>% 
+  separate(classification, sep = ";", into=c("kingdom","phylum","class","order","family", "genus", "species")) %>%
+  select(user_genome,phylum)  %>%
+  mutate("label"=user_genome)
+
+bin_info <- left_join(mag_taxa, mag_info, by=c("user_genome"="Name"))
+bin_info <- left_join(bin_info, res_df, by=c("user_genome"="KO"))
+
+pgpt_filt <- read.csv("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/mgPGPT/drought_pgpt_filted.csv")
+
+
+bin_pgpt <- read.table("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/mgPGPT/mgPGPT_default_filt.tsv", sep = "\t", check.names = F, header = F)
+#bin_pgpt <- separate(bin_pgpt, "V2", sep = "_", into = "PGPT")
+
+
+setDT(bin_pgpt)  # 转为 data.table
+bin_pgpt[, PGPT := tstrsplit(V2, "_", keep = 1)]
+bin_pgpt$ID <- sub("_[^_]+$", "", bin_pgpt$V1)
+
+
+bin_info <- bin_info[bin_info$Completeness > 90 & bin_info$Contamination < 5, ]
+#bin_info <- bin_info[(bin_info$logFC > 0 & bin_info$FDR < 0.05),]
+
+bin_info <- separate(bin_info, phylum, sep = "__", into = c("pre_phylum", "Phylum"))
+
+# pgpt_richess
+pgpt_richess <- NULL
+for (i in bin_info$user_genome){
+  
+  richness_tmp <- length(unique(bin_pgpt[bin_pgpt$ID == i,]$PGPT))
+  df_tmp <- data.frame("label" = i, "Phylum" = bin_info[bin_info$user_genome == i,]$Phylum, "Richness" = richness_tmp )
+  pgpt_richess <- rbind(pgpt_richess, df_tmp)
+}
+
+
+
+# bin treads
+bin_trend <- bin_info[, c("label","logFC","FDR")]
+bin_trend$type = "Stable"
+bin_trend[bin_trend$logFC < 0 & bin_trend$FDR <0.05, ]$type = "Decrease"
+bin_trend[bin_trend$logFC > 0 & bin_trend$FDR <0.05, ]$type = "Increase"
+bin_trend$type <- factor(bin_trend$type, levels=c("Increase","Decrease","Stable"))
+
+
+# bin drought_associated 
+pgpt_filt <- read.csv("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/mgPGPT/drought_pgpt_filted.csv")
+pathway <- readRDS("E:/Methods/plabase/PlaBAse.rds")
+
+
+osm <- pgpt_filt[pgpt_filt$type2 == "OSMOTIC or SALINITY_STRESS",]$PGPT  # Lv5
+biolfilm <- pgpt_filt[pgpt_filt$type2 == "Biofilm",]$PGPT  # Lv5
+spore <- pgpt_filt[pgpt_filt$type2 == "spore",]$PGPT  # Lv5
+ros <- pgpt_filt[pgpt_filt$type2 == "ROS",]$PGPT  # Lv5
+eps <- pgpt_filt[pgpt_filt$type2 == "eps",]$PGPT  # Lv3
+eps <- unique(pathway[pathway$Lv3 == eps,]$Lv5)
+
+C <- pgpt_filt[pgpt_filt$type2 == "C",]$PGPT  # Lv3
+N <- pgpt_filt[pgpt_filt$type2 == "N",]$PGPT  # Lv3
+P <- pgpt_filt[pgpt_filt$type2 == "P",]$PGPT  # Lv3
+S <- pgpt_filt[pgpt_filt$type2 == "S",]$PGPT  # Lv3
+K <- pgpt_filt[pgpt_filt$type2 == "K",]$PGPT  # Lv3
+siderophores <- pgpt_filt[pgpt_filt$type2 == "siderophores",]$PGPT  # Lv4
+phytohormone <- pgpt_filt[pgpt_filt$type2 == "phytohormone",]$PGPT  # Lv4
+colonization <-  pgpt_filt[pgpt_filt$type2 == "colonization",]$PGPT  # Lv3
+
+drought <- c(osm, biolfilm, spore, ros, eps)
+drought_pgpt <- unique(pathway[pathway$Lv5 %in% drought,]$ID)
+
+
+pgpt_drought <- NULL
+for (i in bin_info$user_genome){
+  
+  drought_tmp <- table(bin_pgpt[bin_pgpt$ID == i,]$PGPT %in% drought_pgpt)
+  df_tmp <- data.frame("label" = i, "Phylum" = bin_info[bin_info$user_genome == i,]$Phylum, "Freq" = as.numeric(drought_tmp["TRUE"]) )
+  pgpt_drought <- rbind(pgpt_drought, df_tmp)
+}
+
+
+growth_pgpt <- c(C,N,P,S,K,siderophores,phytohormone,colonization)
+
+growth_pgpt3 <- unique(pathway[pathway$Lv3 %in% growth_pgpt,]$ID)
+growth_pgpt4 <- unique(pathway[pathway$Lv4 %in% growth_pgpt,]$ID)
+
+growth_pgpt <- unique(growth_pgpt3,growth_pgpt4)
+
+
+pgpt_growth <- NULL
+for (i in bin_info$user_genome){
+  
+  drought_tmp <- table(bin_pgpt[bin_pgpt$ID == i,]$PGPT %in% growth_pgpt)
+  df_tmp <- data.frame("label" = i, "Phylum" = bin_info[bin_info$user_genome == i,]$Phylum, "Freq" = as.numeric(drought_tmp["TRUE"]) )
+  pgpt_growth <- rbind(pgpt_growth, df_tmp)
+}
+
+compare <- with(pgpt_richess,kruskal(Richness,Phylum,group = TRUE, p.adj = "fdr"))
+compare
+compare <- with(pgpt_drought,kruskal(Freq,Phylum,group = TRUE, p.adj = "fdr"))
+compare
+compare <- with(pgpt_growth,kruskal(Freq,Phylum,group = TRUE, p.adj = "fdr"))
+compare
+
+
+# tree file
+mag_tree <- ggtree::read.tree("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/gtdbtk_skip_ani/gtdbtk.backbone.bac120.classify.tree")
+
+
+# 假设你已经加载了一个系统发育树对象 mag_tree
+gca_rs_tips <- mag_tree$tip.label[grepl("^(GCA|RS|GB)", mag_tree$tip.label)]
+keep_tip <- bin_info$user_genome
+
+# 使用 drop.tip 删除这些物种
+mag_tree_filtered <- drop.tip(mag_tree, gca_rs_tips)
+mag_tree_filtered <- keep.tip(mag_tree_filtered, keep_tip)
+
+
+# 1. tree plot:
+#------------------
+  
+  tree_plot <- ggtree(mag_tree_filtered,  size=0.1, open.angle=20) +
+  geom_aline(linetype = "dotted", color ="lightgray",linewidth = 0.5)
+  #tree_plot
+  
+  scale_color_manual(values=c("Chloroflexota" = "#FFA500",
+                              "Bacillota" = "#8bc24c",
+                              "Armatimonadota" = "#FFD700",
+                              "Actinomycetota" = "#2196F3",
+                              "Cyanobacteriota" = "#8A4B08",
+                              "Patescibacteria" = "#FF7F00", # orange
+                              "Chlamydiota" = "#d9534f",
+                              "Verrucomicrobiota" = "#86519D",
+                              "Bacteroidota" = "#1B9E77", # dark teal
+                              "Gemmatimonadota" = "#EE4C97",
+                              "Planctomycetota" = "#3B3B98",
+                              "Acidobacteriota" = "#2B5A41",
+                              "Pseudomonadota" = "#E41A1C", # red
+                              "Bdellovibrionota" = "#b4bb72",
+                              "Myxococcota" = "#b23256"))
+
+
+
+colors <- c(
+  "#E41A1C", # red
+  "#377EB8", # blue
+  "#4DAF4A", # green
+  "#984EA3", # purple
+  "#FF7F00", # orange
+  "#FFFF33", # yellow
+  "#A65628", # dark brown
+  "#F781BF", # pink
+  "#666666", # gray
+  "#1B9E77", # dark teal
+  "#D95F02", # deep orange
+  "#6495ED", # muted blue
+  "#E7298A", # deep pink
+  "#66A61E", # olive green
+  "#A6761D", # dark mustard
+  "gray"  # dark gray
+)
+
+
+species_size_plot<-mag_info%>%select(Name, Genome_Size)%>%mutate(Genome_Size2=Genome_Size/1000000)
+
+
+
+
+p <-  rotate_tree(tree_plot, angle = -8.7) +
+  geom_treescale(linesize = 0.5,fontsize = 6,width=0.4, offset = -10) +
+  geom_fruit(
+    data = pgpt_richess,
+    geom = geom_tile,
+    aes(y = label, x = 1, fill =  scales::rescale(Richness, to = c(0, 1))),
+    width = 0.1,
+    height = 0.8,
+    pwidth = 0.0,
+    axis.params = list(
+      axis = "x",
+      title = "PGPT Richness", 
+      text.size = 0, 
+      title.angle = -90,
+      title.height = 0.095,
+      title.size = 5,
+      line.color = "white"
+    )
+  ) +
+  scale_fill_gradientn(
+    name="PGPT richness", 
+    colours = c(
+      "#08306B",  # 深蓝
+      "#08519C",
+      "#2171B5",
+      "#4292C6",
+      "#6BAED6",
+      "#B3E5E5",
+      "#FC9272",
+      "#FB6A4A",
+      "#EF3B2C",
+      "#CB181D",   # 深红
+      "darkred"
+    ), 
+    values = scales::rescale(c(0, 0.2, 0.4, 0.6, 0.8, 1)),
+    guide = guide_colorbar(
+      direction = "horizontal",
+      title.position = "top",
+      title.hjust = 0,
+      barwidth = unit(5, "cm"),  # 可选：控制图例宽度
+      barheight = unit(0.4, "cm"), # 可选：控制图例高度
+      order = 5
+      )
+  ) +
+  new_scale_fill() +
+  
+  geom_fruit(
+    data = pgpt_drought,
+    geom = geom_tile,
+    aes(y = label, x = 1, fill =  rescale(Freq, to = c(0, 1))),
+    width = 0.1,
+    height = 0.8,
+    pwidth = 0.05,
+    axis.params = list(
+      axis = "x",
+      title = "PGPT drought", 
+      text.size = 0, 
+      title.angle = -90,
+      title.height = 0.095,
+      title.size = 5,
+      line.color = "white"
+    )
+  ) +
+  scale_fill_gradientn(
+    name="PGPT drought", 
+    colours = c(
+      "#1F4055",
+      "#335B74",
+      "#6697B1",
+      "#81B3CC",
+      "#8ECFE0",
+      "#D9CFA6",
+      "#E8C77C",
+      "#F6BE4E",
+      "#C98D49",
+      "#A56B3F",
+      "#5A3A21"
+    ), 
+    values = scales::rescale(c(0, 0.2, 0.4, 0.6, 0.8, 1)),
+    guide = guide_colorbar(
+      direction = "horizontal",
+      title.position = "top",
+      title.hjust = 0,
+      barwidth = unit(5, "cm"),  # 可选：控制图例宽度
+      barheight = unit(0.4, "cm"), # 可选：控制图例高度
+      order = 4
+      )
+  ) +
+  new_scale_fill() +
+  
+  geom_fruit(
+    data = pgpt_growth,
+    geom = geom_tile,
+    aes(y = label, x = 1, fill =  rescale(Freq, to = c(0, 1))),
+    width = 0.1,
+    height = 0.8,
+    pwidth = 0.05,
+    axis.params = list(
+      axis = "x",
+      title = "PGPT plant growth", 
+      text.size = 0, 
+      title.angle = -90,
+      title.height = 0.095,
+      title.size = 5,
+      line.color = "white"
+    )
+  ) +
+  scale_fill_gradientn(
+    name="PGPT plant growth", 
+    colours = c(
+      "darkblue", 
+      "#1B4E8A", 
+      "#2F6CA8", 
+      "#57A8E3", 
+      "#75C9F9", 
+      "#B9E8FF", 
+      "#D6F5E4", 
+      "#94D7A9", 
+      "#6BA843", 
+      "#3D7E0F", 
+      "darkgreen"
+    ), 
+    values = scales::rescale(c(0, 0.2, 0.4, 0.6, 0.8, 1)),
+    guide = guide_colorbar(
+      direction = "horizontal",
+      title.position = "top",
+      title.hjust = 0,
+      barwidth = unit(5, "cm"),  # 可选：控制图例宽度
+      barheight = unit(0.4, "cm"), # 可选：控制图例高度
+      order = 3
+    ),
+  ) +
+  new_scale_fill() +
+  geom_fruit(
+    data = bin_trend,
+    geom = geom_tile,
+    mapping = aes(y = label, x=1, fill = type),
+    width = 0.1,
+    pwidth = 0.05,
+    axis.params = list(
+      axis = "x",
+      title = "Direction of Change", 
+      text.size = 0, 
+      title.angle = -90,
+      title.height = 0.095,
+      title.size = 5,
+      line.color = "white"
+    )
+  ) + 
+  scale_fill_manual(name = "Direction of change",
+                    values=c("Increase"="red",
+                             "Decrease"="blue",
+                             "Stable"="gray"
+                             ),
+                    guide = guide_legend(order = 2)) +
+new_scale_fill() +
+  geom_fruit(
+    data = bin_info,
+    geom = geom_tile,
+    mapping = aes(y = label, x=1, fill = Phylum),
+    width = 0.1,
+    pwidth = 0.05,
+    axis.params = list(
+      axis = "x",
+      title = "MAG phylum", 
+      text.size = 0, 
+      title.angle = -90,
+      title.height = 0.1,
+      title.size = 5,
+      line.color = "white"
+    )
+  ) + 
+    scale_fill_manual(name = "MAG Phylum",
+                    values=c("Chloroflexota" = "#FFA500",
+                             "Bacillota" = "#8bc24c",
+                             "Armatimonadota" = "#FFD700",
+                             "Actinomycetota" = "#2196F3",
+                             "Cyanobacteriota" = "#8A4B08",
+                             "Patescibacteria" = "#FF7F00", # orange
+                             "Chlamydiota" = "#d9534f",
+                             "Verrucomicrobiota" = "#86519D",
+                             "Bacteroidota" = "#1B9E77", # dark teal
+                             "Gemmatimonadota" = "#EE4C97",
+                             "Planctomycetota" = "#3B3B98",
+                             "Acidobacteriota" = "#2B5A41",
+                             "Pseudomonadota" = "#E41A1C", # red
+                             "Bdellovibrionota" = "#b4bb72",
+                             "Myxococcota" = "#b23256"),
+                    guide = guide_legend(order = 1, nrow = 15)) +
+  geom_fruit(data=species_size_plot,geom=geom_bar,
+             stat="identity",width=0.7, offset = 0.05, 
+             aes(y=Name,x=Genome_Size2),pwidth=0.25,
+             axis.params=list(
+               title = "Gneome size (Mb)",
+               axis       = "x",
+               text.size  = 5,
+               hjust      = 0.5,
+               vjust      = 1,
+               nbreak     = 2,
+               text.angle = 0,
+               title.size = 5,
+               title.angle = -90
+             ),
+             grid.params=list()) +
+  theme(
+    plot.margin = margin(40,40,40,40),
+    legend.position = c(1.08, 0.5),
+    legend.title = element_text(size=20),
+    legend.text = element_text(size = 16)) 
+
+print(p)
+ # 16 12 
+ 
+```

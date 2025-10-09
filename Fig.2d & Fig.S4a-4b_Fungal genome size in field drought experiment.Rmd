@@ -1,0 +1,326 @@
+---
+title: "Fig.2d & Fig.S4a-3b_Fungal genome size in field drought experiment"
+author: "Huanhuan Zhu"
+date: "2025-09-19"
+output: html_document
+---
+
+
+## Fig.2d_Fungal genome size pre-flowering dorught
+```{r, fig.align='center', fig.height=5, fig.width=9.1, warning=FALSE, message=FALSE}
+
+
+library(splitstackshape)
+library(patchwork)
+library(tibble)
+library(reshape2)
+library(ggpubr)
+library(agricolae) # kruskal for nonparametric test
+library(ggh4x)  # set individual y axis for facet
+library(ggplot2)
+library(tidyverse)
+library(gghalves)
+library(ggsignif)
+library(rstatix)
+library(data.table)
+library(tidyr)
+library(dplyr)
+library(vegan)
+
+rm(list=ls())
+
+# Fig.3d_Fungal gs pre-flowering dorught
+setwd("E:/epicon/")
+
+metadata <- read.csv("0000BacteriaFungi.1029x1293.13165.2019.07.10.csv", row.names = 1)
+metadata1 <- metadata[metadata$Kingdom1 == "Fungi",]
+
+otu_id <- metadata1
+#colnames(otu_id)[13:18] <- c("phylum", "class", "order", "family", "genus", "species")
+
+for (j in 2:ncol(otu_id)) {
+  otu_id[[j]] <- ifelse(
+    otu_id[[j]] == "Incertae sedis",
+    paste0(otu_id[[j-1]], "_Incertae_sedis"),
+    otu_id[[j]]
+  )
+}
+
+fungi_traits <- read.csv("traits/rCNV_rlt_taxa_spl_GSGN_new.csv")
+
+fungi_traits$phy <- gsub("p_", "", fungi_traits$phy)
+fungi_traits$cla <- gsub("c_", "", fungi_traits$cla)
+fungi_traits$ord <- gsub("o_", "", fungi_traits$ord)
+fungi_traits$fam <- gsub("f_", "", fungi_traits$fam)
+fungi_traits$Gen <- gsub("g_", "", fungi_traits$Gen)
+
+
+metadata1_s <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ Name.y, fungi_traits, FUN = "mean")
+metadata1_g <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ Gen, fungi_traits, FUN = "mean")
+metadata1_f <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ fam, fungi_traits, FUN = "mean")
+metadata1_o <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ ord, fungi_traits, FUN = "mean")
+metadata1_c <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ cla, fungi_traits, FUN = "mean")
+metadata1_p <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ phy, fungi_traits, FUN = "mean")
+
+metadata1_s$level <- "species"
+metadata1_g$level <- "genus"
+metadata1_f$level <- "family"
+metadata1_o$level <- "order"
+metadata1_c$level <- "class"
+metadata1_p$level <- "phylum"
+
+colnames(metadata1_s)[1] <- "taxon"
+colnames(metadata1_g)[1] <- "taxon"
+colnames(metadata1_f)[1] <- "taxon"
+colnames(metadata1_o)[1] <- "taxon"
+colnames(metadata1_c)[1] <- "taxon"
+colnames(metadata1_p)[1] <- "taxon"
+
+metadata1_all <- bind_rows(metadata1_s, metadata1_g, metadata1_f,
+                           metadata1_o, metadata1_c, metadata1_p)
+
+
+otu_id$taxon_try <-        ifelse(otu_id$Genus %in% metadata1_g$taxon, otu_id$Genus,
+                                  ifelse(otu_id$Family %in% metadata1_f$taxon, otu_id$Family,
+                                         ifelse(otu_id$Order %in% metadata1_o$taxon, otu_id$Order,
+                                                ifelse(otu_id$Class %in% metadata1_c$taxon, otu_id$Class,
+                                                       ifelse(otu_id$Phylum %in% metadata1_p$taxon, otu_id$Phylum,
+                                                              NA)))))
+
+otu_id_with_traits <- left_join(otu_id, metadata1_all, by = c("taxon_try" = "taxon"))
+otu_id_with_traits[is.na(otu_id_with_traits$Both_ITS_LSU),]$Both_ITS_LSU = mean(fungi_traits[!is.na(fungi_traits$Both_ITS_LSU),]$Both_ITS_LSU)
+otu_id_with_traits[is.na(otu_id_with_traits$Assembly_Length),]$Assembly_Length = mean(fungi_traits[!is.na(fungi_traits$Assembly_Length),]$Assembly_Length)
+rownames(otu_id_with_traits) <- otu_id_with_traits$OTU.ID
+
+#saveRDS(otu_id_with_traits, "E:/Functrait/Result/Fungi/otu2/traits/otu_id_with_traits.rds")
+
+#####################
+otu_all0 <- otu_id_with_traits[,1:1029]/otu_id_with_traits$Both_ITS_LSU
+otu_all0 <- round(otu_all0[,grepl("Z",colnames(otu_all0))])
+test <- as.data.frame(colSums(otu_all0))
+
+
+sample_sums <- colSums(otu_all0)
+
+min_sum <- min(sample_sums)
+
+set.seed(4941)
+
+otu_all0_rarefied <- t(rrarefy(t(otu_all0), sample = min_sum))
+
+otu_all_gs <- as.data.frame(otu_all0_rarefied)
+otu_all_gs$OTU.ID <- rownames(otu_all_gs)
+otu_all_gs <- left_join(otu_all_gs, otu_id_with_traits[,c("OTU.ID","Assembly_Length")], by="OTU.ID")
+
+
+otu_all_gs1 <- otu_all_gs
+for (i in (1:(ncol(otu_all_gs1)-2))){
+  otu_all_gs1[,i] <-  otu_all_gs1[,i] * otu_all_gs1[,ncol(otu_all_gs1)]/100000000
+}
+
+otu_all_gs2 <- as.data.frame(colSums(otu_all_gs1[,1:(ncol(otu_all_gs1) -2)]))
+colnames(otu_all_gs2) <- "genome_size"
+otu_all_gs2$runningSampleID <- rownames(otu_all_gs2)
+
+group <- read.csv("0000Meta.1029.2019.07.10.csv")
+otu_all_gs3 <- merge(otu_all_gs2, group,by.x="runningSampleID", by.y= "aa1", all.x = TRUE)
+otu_all_gs3[otu_all_gs3$Timepiont == "TP08" & otu_all_gs3$Treatment == "Rewatering_Pre_flowering_drought",]$Treatment = "Pre_flowering_drought"
+
+otu_all_gs4 <- otu_all_gs3[otu_all_gs3$Timepiont %in% paste0("TP0", c(3:8)),]
+otu_all_gs4 <- otu_all_gs4[otu_all_gs4$Treatment != "Post_flowering_drought", ]
+otu_all_gs4$Treatment <- factor(otu_all_gs4$Treatment, levels = c("Control", "Pre_flowering_drought"))
+
+
+wilcox_res <- wilcox.test(genome_size ~ Treatment, data = otu_all_gs4)
+
+W <- round(wilcox_res$statistic, 2)
+p_val  <- wilcox_res$p.value
+
+#label_text <- bquote(chi^2 * "(" * "df = " * .(df) * ")" == .(format(chi_sq, format="g", digits=3)) * "," ~ italic(p) == .(signif(p_val, 3)))
+label_text <- sprintf("italic(W) == %g * ',' ~ italic(p) == %s", 
+                      signif(W,3), signif(p_val, 3))
+
+set.seed(123)
+
+p <- ggplot(otu_all_gs4, aes(x=Treatment, y=genome_size)) +
+  geom_half_violin(side = "r", aes(fill = Treatment), color=NA, alpha=1, position = position_dodge(width = 0.8)) +
+  geom_half_boxplot(side = "r", errorbar.draw = FALSE, width=0.2, linewidth=0.5, alpha = 0.8, 
+                    position = position_dodge(width = 0.8), outlier.size = 2.5, outlier.alpha = 1) +
+  geom_jitter(aes(x = as.numeric(factor(Treatment)) - 0.15, color = Treatment),
+              width = 0.05, alpha = 0.8, size = 2) +
+  scale_fill_manual(name = "Treatment", values = c("Control" = "royalblue",
+                                                   "Pre_flowering_drought" = "orange"), 
+                    labels =c("Control" = "Control\n(TP3 - TP8)",
+                              "Pre_flowering_drought" = "Pre-flowering drought\n(TP3 - TP8)")) + # 淡橙
+  scale_color_manual(name = "Treatment", values = c("Control" = "royalblue",
+                                                    "Pre_flowering_drought" = "orange"), 
+                     labels =c("Control" = "Control\n(TP3 - TP8)",
+                               "Pre_flowering_drought" = "Pre-flowering drought\n(TP3 - TP8)")) +
+  labs(title = "Fungi", x=NULL, y="CWM genome size(Mb)") +
+  ggplot2::annotate("text", x = "Control", y = 24, label = label_text, size = 8, hjust = 0.2, parse = TRUE) +
+  #geom_text(data = df, aes(x = x, y = y+1, label = label),size=8) +
+  ylim(12,25) +
+  theme_bw() +
+  theme(plot.title = element_text(size = 30, hjust = 0.5),
+        axis.text.y = element_text(size = 22, color="black"),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title = element_text(size=26),
+        legend.text = element_text(size=22),
+        legend.title = element_text(size=26, vjust=2),
+        legend.key.spacing.y = unit(0.5,"cm"))
+# 850 500
+print(p)
+
+
+```
+
+
+
+## # Fig.S4a_Fungal gs post-flowering dorught
+```{r, fig.align='center', fig.height=7.2, fig.width=5.55, warning=FALSE, message=FALSE}
+
+otu_all_gs4 <- otu_all_gs3[otu_all_gs3$Timepiont %in% paste0("TP", 10:17),]
+otu_all_gs4 <- otu_all_gs4[otu_all_gs4$Treatment != "Rewatering_Pre_flowering_drought", ]
+otu_all_gs4$Treatment <- factor(otu_all_gs4$Treatment, levels = c("Control", "Post_flowering_drought"))
+
+wilcox_res <- wilcox.test(genome_size ~ Treatment, data = otu_all_gs4)
+
+W <- round(wilcox_res$statistic, 2)
+p_val  <- wilcox_res$p.value
+
+#label_text <- bquote(chi^2 * "(" * "df = " * .(df) * ")" == .(format(chi_sq, format="g", digits=3)) * "," ~ italic(p) == .(signif(p_val, 3)))
+label_text <- sprintf("italic(W) == %g * ',' ~ italic(p) == %s", 
+                      signif(W,3), signif(p_val, 3))
+set.seed(123)
+
+p <- ggplot(otu_all_gs4, aes(x=Treatment, y=genome_size)) +
+  geom_half_violin(side = "r", aes(fill = Treatment), color=NA, alpha=1, position = position_dodge(width = 0.8)) +
+  geom_half_boxplot(side = "r", errorbar.draw = FALSE, width=0.2, linewidth=0.5, alpha = 0.8, 
+                    position = position_dodge(width = 0.8), outlier.size = 2.5, outlier.alpha = 1) +
+  geom_jitter(aes(x = as.numeric(factor(Treatment)) - 0.15, color = Treatment),
+              width = 0.05, alpha = 0.8, size = 2) +
+  scale_fill_manual(name = "Treatment", values = c("Control" = "royalblue",
+                                                   "Post_flowering_drought" = "chocolate"), 
+                    labels =c("Control" = "Control\n(TP10 - TP17)",
+                              "Post_flowering_drought" = "Post-flowering drought\n(TP10 - TP17)")) + # 淡橙
+  scale_color_manual(name = "Treatment", values = c("Control" = "royalblue",
+                                                    "Post_flowering_drought" = "chocolate"), 
+                     labels =c("Control" = "Control\n(TP10 - TP17)",
+                               "Post_flowering_drought" = "Post-flowering drought\n(TP10 - TP17)")) +
+  labs(title = "Fungi", x=NULL, y="CWM genome size(Mb)") +
+  ggplot2::annotate("text", x = "Control", y = 29, label = label_text, size = 8, hjust = 0.2, parse = TRUE) +
+  #geom_text(data = df, aes(x = x, y = y+1, label = label),size=8) +
+  ylim(11,30) +
+  theme_bw() +
+  theme(plot.title = element_text(size = 30, hjust = 0.5),
+        axis.text.y = element_text(size = 22, color="black"),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title = element_text(size=26),
+        legend.text = element_text(size=22),
+        legend.title = element_text(size=26, vjust=2),
+        legend.key.spacing.y = unit(0.5,"cm"),
+        legend.position = "bottom",
+        legend.direction = "vertical")
+
+print(p)
+```
+
+
+## Fig.S4b_Fungal genome size all
+```{r, fig.align='center', fig.height=6.2, fig.width=19.48, warning=FALSE, message=FALSE}
+
+# Pre_flowering_drought
+df_asterisk_Pre_flowering_drought <- NULL
+for (i in paste0("TP0",3:8)){
+  df_tpm <- wilcox.test(otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Control", ]$genome_size, 
+                        otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Pre_flowering_drought", ]$genome_size)
+  df_tpm2 <- data.frame("Timepoint" = i, "Treatment" = "Pre_flowering_drought", label = df_tpm$p.value)
+  df_asterisk_Pre_flowering_drought <- rbind(df_asterisk_Pre_flowering_drought, df_tpm2)
+} 
+df_asterisk_Pre_flowering_drought$label <- p.adjust(df_asterisk_Pre_flowering_drought$label, method = "fdr")
+
+df_asterisk_Pre_flowering_drought <- df_asterisk_Pre_flowering_drought %>%
+  mutate(stars = case_when(
+    label < 0.001 ~ "***",
+    label < 0.01  ~ "**",
+    label < 0.05  ~ "*",
+    TRUE ~ "ns"
+  ))
+
+# Rewatering_Pre_flowering_drought
+df_asterisk_Rewatering_Pre_flowering_drought <- NULL
+for (i in c("TP09", paste0("TP",10:17))){
+  df_tpm <- wilcox.test(otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Control", ]$genome_size, 
+                        otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Rewatering_Pre_flowering_drought", ]$genome_size)
+  df_tpm2 <- data.frame("Timepoint" = i, "Treatment" = "Rewatering_Pre_flowering_drought", label = df_tpm$p.value)
+  df_asterisk_Rewatering_Pre_flowering_drought <- rbind(df_asterisk_Rewatering_Pre_flowering_drought, df_tpm2)
+} 
+
+df_asterisk_Rewatering_Pre_flowering_drought$label <- p.adjust(df_asterisk_Rewatering_Pre_flowering_drought$label, method = "fdr")
+
+df_asterisk_Rewatering_Pre_flowering_drought <- df_asterisk_Rewatering_Pre_flowering_drought %>%
+  mutate(stars = case_when(
+    label < 0.001 ~ "***",
+    label < 0.01  ~ "**",
+    label < 0.05  ~ "*",
+    TRUE ~ "ns"
+  ))
+
+
+# Post_flowering_drought
+df_asterisk_Post_flowering_drought <- NULL
+for (i in c("TP08", "TP09", paste0("TP",10:17))){
+  df_tpm <- wilcox.test(otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Control", ]$genome_size, 
+                        otu_all_gs3[otu_all_gs3$Timepiont == i & otu_all_gs3$Treatment == "Post_flowering_drought", ]$genome_size)
+  df_tpm2 <- data.frame("Timepoint" = i, "Treatment" = "Post_flowering_drought", label = df_tpm$p.value)
+  df_asterisk_Post_flowering_drought <- rbind(df_asterisk_Post_flowering_drought, df_tpm2)
+} 
+
+df_asterisk_Post_flowering_drought$label <- p.adjust(df_asterisk_Post_flowering_drought$label, method = "fdr")
+
+df_asterisk_Post_flowering_drought <- df_asterisk_Post_flowering_drought %>%
+  mutate(stars = case_when(
+    label < 0.001 ~ "***",
+    label < 0.01  ~ "**",
+    label < 0.05  ~ "*",
+    TRUE ~ "ns"
+  ))
+
+
+# all 
+otu_all_gs3$Treatment <- factor(otu_all_gs3$Treatment, levels = c("Control",
+                                                                  "Pre_flowering_drought",
+                                                                  "Post_flowering_drought",
+                                                                  "Rewatering_Pre_flowering_drought"))
+
+ggplot(otu_all_gs3, aes(x=factor(Timepiont), y=genome_size,  color = factor(Treatment))) +
+  geom_boxplot(linewidth = 1, width = 0.7, position = position_dodge2(preserve = "single", padding = 0.2)) +
+  scale_color_manual(name = "Treatment", values = c("Control" = "royalblue",
+                                                    "Post_flowering_drought" = "chocolate",
+                                                    "Pre_flowering_drought" = "orange",
+                                                    "Rewatering_Pre_flowering_drought" = "skyblue"), 
+                     labels =c("Control" = "Control",
+                               "Post_flowering_drought" = "Post-flowering drought",
+                               "Pre_flowering_drought" = "Pre-flowering drought",
+                               "Rewatering_Pre_flowering_drought" = "Rewatering pre-flowering drought")) +
+  geom_hline(aes(yintercept = 11), linetype = "dashed", color = "darkgray") +
+  geom_text(data = df_asterisk_Pre_flowering_drought, aes(x=Timepoint, y = 7.5, label = stars), size = 8) +
+  geom_text(data = df_asterisk_Rewatering_Pre_flowering_drought, aes(x=Timepoint, y = 6, label = stars), size = 8) +
+  geom_text(data = df_asterisk_Post_flowering_drought, aes(x=Timepoint, y = 4.5, label = stars), size = 8) +
+  annotate(geom = "text", x="TP01", y=9.5, label="Significance (compared with control): * p < 0.05, ** p < 0.01, *** p < 0.001", size=8, hjust=0) +
+  labs(x= "Time point (in weeks)", y= "Genome size (Mb)", title = "Fungi") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 30, hjust = 0.5),
+        axis.text.y = element_text(size = 22, color="black"),
+        axis.ticks = element_blank(),
+        axis.text.x = element_text(size = 22, color="black", angle = 90,vjust = 0.5),
+        axis.title = element_text(size=26),
+        legend.text = element_text(size=22),
+        legend.title = element_text(size=26, vjust=2),
+        legend.key.spacing.y = unit(0.5,"cm"))
+  
+  # 1948 620
+
+```

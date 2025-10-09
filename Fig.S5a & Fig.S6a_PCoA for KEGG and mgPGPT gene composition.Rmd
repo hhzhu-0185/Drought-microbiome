@@ -1,0 +1,232 @@
+---
+title: "Fig.S5a & Fig.S6a_PCoA for KEGG and mgPGPT gene composition"
+author: "Huanhuan Zhu"
+date: "2025-09-28"
+output: html_document
+---
+
+
+## Fig.S5a_PCoA for KEGG gene composition 
+```{r, fig.align='center', fig.height=6.88, fig.width=6.65, warning=FALSE, message=FALSE}
+
+
+library(tidyverse)
+library(ggplot2)
+library(tibble)
+library(edgeR)
+library(data.table)
+library(patchwork)
+library(vegan)
+library(ape)
+library(ggplot2)
+
+
+rm(list=ls())
+
+setwd("E:/HMME//Metagenome/Result_new/eggnog/")
+
+ko_all <- read.table("eggnog.summarizeAbundance.count.KEGG_ko.raw.txt",
+                     check.names = F,
+                     row.names = 1,
+                     header = T)
+ko_all <- ko_all[2:nrow(ko_all),]
+ko_all_up <- ko_all
+ko_all_up <- ko_all_up[,grepl("TS",colnames(ko_all_up))]
+
+
+set.seed(123)
+count_data <- ko_all_up
+#count_data <- count_data[,grepl("TS",colnames(count_data))]
+
+count_data <- round(count_data)
+
+col_data <- data.frame(
+  sample = colnames(count_data),
+  drought = as.numeric(substr(colnames(count_data),1,1))
+)
+rownames(col_data) <- col_data$sample
+
+
+dge <- DGEList(counts = count_data, group = col_data$drought)
+
+keep <- filterByExpr(dge)
+dge <- dge[keep,, keep.lib.sizes=FALSE]
+
+dge <- calcNormFactors(dge, method = "TMM")
+
+cpm_norm <- cpm(dge, normalized.lib.sizes = TRUE)
+
+ko_t <- t(cpm_norm)
+
+dist_mat <- vegdist(ko_t, method = "bray")
+
+pcoa_res <- pcoa(dist_mat)
+
+pcoa_df <- data.frame(
+  Sample = rownames(pcoa_res$vectors),
+  Axis1 = pcoa_res$vectors[,1],
+  Axis2 = pcoa_res$vectors[,2]
+)
+
+pcoa_df$Generation <- substr(pcoa_df$Sample, 1, 1)
+pcoa_df$type <- "KEGG"
+
+# adnois
+
+adonis_res <- adonis2(ko_t ~ pcoa_df$Generation, method = "bray")
+adonis_res
+perma_label <- sprintf("PERMANOVA:~ atop(R^2 == %.3f,~ italic(p) < %.3g)",
+                       adonis_res$R2[1],
+                       adonis_res$`Pr(>F)`[1])
+
+
+perma_label <- sprintf("atop(R^2 == %.3f,~ italic(p) < %.3g)",
+                       adonis_res$R2[1],
+                       adonis_res$`Pr(>F)`[1])
+
+
+colors <- c("#1b9e77",
+            "#3B3B98",
+            "#984ea3",
+            "#FFD700",
+            "#FF7F00",
+            "#e41a1c",
+            "#8c510a")
+
+p <- ggplot(pcoa_df, aes(x = Axis1, y = Axis2, fill = Generation)) +
+  geom_point(size = 7, shape = 21, alpha = 0.7) +
+  scale_fill_manual(values = colors) +
+  labs(title = "KEGG") +
+  xlab(paste0("PC1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)")) +
+  ylab(paste0("PC2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)")) +
+  annotate(geom = "text", x = -Inf, y = -Inf, label = perma_label, parse = TRUE, hjust = -0.00, vjust = -0.1, size = 8) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(size = 30, hjust = 0.5),
+    axis.text = element_text(size=22, angle = 0, hjust = 0.5, color = "black"),
+    strip.text = element_text(size=26),
+    axis.title = element_text(size=26),
+    legend.key.height = unit(0.5, "cm"), 
+    legend.key.width = unit(0.3, "cm"),
+    legend.title = element_text(size = 26), 
+    legend.text = element_text(size = 22)   
+  ) 
+
+print(p)
+
+# h6.88 w6.65
+```
+
+
+## Fig.S6a_PCoA for mgPGPT gene composition 
+```{r, fig.align='center', fig.height=6.88, fig.width=6.65, warning=FALSE, message=FALSE}
+
+rm(list=ls())
+
+
+# mgPGPT
+setwd("E:/HMME/Metagenome/Result_new/mgPGPT/")
+
+ko_all <- read.table("mgPGPT.summarizeAbundance.count.sseqid.raw.txt",
+                     check.names = F,
+                     row.names = 1,
+                     header = T)
+#ko_all <- ko_all[2:nrow(ko_all),]
+ko_all_up <- ko_all
+ko_all_up <- ko_all_up[,grepl("TS",colnames(ko_all_up))]
+# ko_all_up$ID <- rownames(ko_all_up)
+# 
+# 
+# pathway <- fread("pathways_plabase.txt", header = T)
+# pathway <- column_to_rownames(pathway, "S.NO")
+# 
+# 
+# 
+# ko_all_up <- left_join(ko_all_up, pathway[,c("ID","Lv3")], by=c("ID"="ID"))
+# ko_all_up <- aggregate(.~Lv3, ko_all_up[,c(1:35,37)], FUN="sum")
+# ko_all_up <- column_to_rownames(ko_all_up, "Lv3")
+
+set.seed(123)
+count_data <- ko_all_up
+#count_data <- count_data[,grepl("TS",colnames(count_data))]
+
+count_data <- round(count_data)
+
+col_data <- data.frame(
+  sample = colnames(count_data),
+  drought = as.numeric(substr(colnames(count_data),1,1))
+)
+rownames(col_data) <- col_data$sample
+
+dge <- DGEList(counts = count_data, group = col_data$drought)
+
+keep <- filterByExpr(dge)
+dge <- dge[keep,, keep.lib.sizes=FALSE]
+
+# TMM normalization
+dge <- calcNormFactors(dge, method = "TMM")
+
+cpm_norm <- cpm(dge, normalized.lib.sizes = TRUE)
+
+ko_t <- t(cpm_norm)
+
+dist_mat <- vegdist(ko_t, method = "bray") 
+
+pcoa_res <- pcoa(dist_mat)
+
+pcoa_df <- data.frame(
+  Sample = rownames(pcoa_res$vectors),
+  Axis1 = pcoa_res$vectors[,1],
+  Axis2 = pcoa_res$vectors[,2]
+)
+
+pcoa_df$Generation <- substr(pcoa_df$Sample, 1, 1)
+pcoa_df$type <- "mgPGPT"
+
+# adnois
+adonis_res <- adonis2(ko_t ~ pcoa_df$Generation, method = "bray")
+adonis_res
+perma_label <- sprintf("PERMANOVA:~ atop(R^2 == %.3f,~ italic(p) < %.3g)",
+                       adonis_res$R2[1],
+                       adonis_res$`Pr(>F)`[1])
+
+
+perma_label <- sprintf("atop(R^2 == %.3f,~ italic(p) < %.3g)",
+                       adonis_res$R2[1],
+                       adonis_res$`Pr(>F)`[1])
+
+colors <- c("#1b9e77",
+            "#3B3B98",
+            "#984ea3",
+            "#FFD700",
+            "#FF7F00",
+            "#e41a1c",
+            "#8c510a")
+
+p <- ggplot(pcoa_df, aes(x = Axis1, y = Axis2, fill = Generation)) +
+  geom_point(size = 7, shape = 21, alpha = 0.7) +
+  scale_fill_manual(values = colors) +
+  labs(title = "mgPGPT") +
+  xlab(paste0("PC1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)")) +
+  ylab(paste0("PC2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)")) +
+  annotate(geom = "text", x = -Inf, y = -Inf, label = perma_label, parse = TRUE, hjust = -0.00, vjust = -0.1, size = 8) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(size = 30, hjust = 0.5),
+    axis.text = element_text(size=22, angle = 0, hjust = 0.5, color = "black"),
+    strip.text = element_text(size=26),
+    axis.title = element_text(size=26),
+    legend.key.height = unit(0.5, "cm"),
+    legend.key.width = unit(0.3, "cm"),
+    legend.title = element_text(size = 26), 
+    legend.text = element_text(size = 22) 
+  )
+
+print(p)
+
+# h6.88 w6.65
+
+```
+

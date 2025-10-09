@@ -1,0 +1,189 @@
+---
+title: "Fig.5a & Fig.5b_Isolates of Bacillota and Trochoderma"
+author: "Huanhuan Zhu"
+date: "2025-10-09"
+output: html_document
+---
+
+
+## Fig.5a Phylogeny tree of Bacillota isolates and enriched OTUs 
+```{r, fig.align='center', fig.height=8, fig.width=10.5, warning=FALSE, message=FALSE}
+
+library(ggtree)
+library(ape)
+library(ggtreeExtra)
+library(ggnewscale)
+library(scales)
+library(ggplot2)
+
+rm(list=ls())
+
+# tree file
+
+isolate_tree <- ggtree::read.tree("E:/HMME/Amplicon/5-strain screeing/final tree/bacteria/bacteria_filtered_ML_1000.nwk")
+
+# 1. tree plot:
+tree_plot <- ggtree(isolate_tree, size = 0.3, open.angle = 20) +
+  geom_aline(linetype = "dotted", color = "gray", linewidth = 0.5) +
+  geom_treescale(linesize = 0.5, fontsize = 4, width = 0.02, offset = -1) +
+  geom_tiplab(size = 3, align = TRUE, linetype = NA) +
+  xlim(0, max(isolate_tree$edge.length) + 0.3)
+# geom_text2(aes(label = node), size = 2, hjust = -0.3) 
+  # geom_text2(aes(subset = !isTip & !is.na(label), label = label),
+  #            size = 2, hjust = -0.2)       
+
+isolate_tree$tip.label
+isolate_tree$tip.label <- c(
+  "italic('Bacillus cereus')~' G9241 (Isolate_26)'",
+  "italic('Lysinibacillus')~' sp. (OTU_167)'",
+  "italic('Bacillus butanolivorans')~'(Isolate_28)'",
+  "italic('Bacillus drentensis')~'(Isolate_14)'",
+  "italic('Bacillus drentensis')~'(OTU_3)'",
+  "italic('Bacillus safensis')~'(Isolate_29)'",
+  "italic('Metabacillus')~' sp. (OTU_173)'",
+  "italic('Oxalophagus')~' sp. (OTU_97)'",
+  "italic('Paenibacillus')~' sp. (OTU_49)'",
+  "italic('Novosphingobium capsulatum')~'(Isolate_39)'",
+  "italic('Pseudomonas batumici')~'(Isolate_36)'",
+  "italic('Enterobacter cloacae')~'(Isolate_30)'"
+)
+
+isolate_tree$tip.label <- c(
+  "italic('Bacillus')~' sp. (Isolate_26)'",
+  "italic('Lysinibacillus')~' sp. (OTU_167)'",
+  "italic('Peribacillus')~'sp. (Isolate_28)'",
+  "italic('Neobacillus')~'sp. (Isolate_14)'",
+  "italic('Neobacillus')~'sp. (OTU_3)'",
+  "italic('Bacillus')~'sp. (Isolate_29)'",
+  "italic('Metabacillus')~' sp. (OTU_173)'",
+  "italic('Oxalophagus')~' sp. (OTU_97)'",
+  "italic('Paenibacillus')~' sp. (OTU_49)'",
+  "italic('Sphingomonas')~'sp. (Isolate_39)'",
+  "italic('Pseudomonas')~'sp. (Isolate_36)'",
+  "italic('Enterobacter')~'sp. (Isolate_30)'"
+)
+
+new_order <- c(
+  "Lysinibacillus .sp (OTU_167)",
+  "Bacillus cereus G9241 (Isolate_26)",
+  "Bacillus butanolivorans (Isolate_28)",
+  "Bacillus drentensis (OTU_3)",
+  "Bacillus drentensis (Isolate_14)",
+  "Metabacillus .sp (OTU_173)",
+  "Bacillus safensis (Isolate_29)",
+  "Oxalophagus .sp (OTU_97)",
+  "Enterobacter cloacae (Isolate_30)",
+  "Pseudomonas batumici (Isolate_36)",
+  "Paenibacillus .sp (OTU_49)",
+  "Novosphingobium capsulatum (Isolate_39)"
+)
+isolate_tree$node.label
+
+isolate_tree$node.label <- c("", "86", "57", "53", "64", "88", "94", "97", "76", "99")
+
+
+library(ggtree)
+p <- ggtree(isolate_tree, size = 0.5, ladderize = FALSE) %<+% data.frame(label = rev(new_order)) +
+geom_aline(linetype = "dotted", color = "gray", linewidth = 0.5) +
+  geom_treescale(x = 0.000, y = 1,  linesize = 0.5, fontsize = 8, width = 0.05, offset = -0.6) +
+  geom_tiplab(size = 8, align = TRUE, linetype = NA, hjust = 0,offset = 0, parse =TRUE) +
+  geom_nodelab(aes(label = label),    size = 6,    hjust = -0.1,    vjust = .5  ) +
+  xlim(0, max(isolate_tree$edge.length) + 0.6)
+
+p2<-ggtree::rotate(p,13)
+
+tree_data <- p2$data
+group <-data.frame(
+  "name" = tree_data$label[1:12], 
+  "Phylum" = c(rep(c("Bacillota","Pseudomonadota"), c(9,3))),
+  "Type" = c("Isolate",
+             "OTU",
+             "Isolate",
+             "Isolate",
+             "OTU",
+             "Isolate",
+             "OTU",
+             "OTU",
+             "OTU",
+             "Isolate",
+             "Isolate",
+             "Isolate"))
+group$Phylum <- as.factor(group$Phylum)
+
+
+p3 <- p2 +
+  geom_fruit(
+    data = group,
+    geom = geom_point,
+    aes(y = name, x = 1, color =  factor(Phylum), shape = factor(Type)),
+    size=5,
+    pwidth = 1.6,
+    stroke = 3,
+  ) +
+  ggplot2:: scale_color_manual(
+    name="Phylum", 
+    values = c(
+      "Bacillota" = "#4daf4a",
+      "Pseudomonadota" = "#d95f02"
+    )) +
+  ggplot2::scale_shape_manual(
+    name="Source", 
+    values = c(
+      "Isolate" = 8,
+      "OTU" = 19
+    )) +
+  xlim_tree(0.5)  +
+  theme(plot.margin = margin(r = 50),
+    legend.title = element_text(size=26),
+    legend.text = element_text(size=22),
+    legend.position = "bottom",  # ??????一些
+    legend.justification = c(0, 0.5),  # ???敕绞?
+    legend.background = element_rect(fill = "transparent")  # ??选??透??????
+        )
+
+print(p3)
+
+# 1050 800
+# 10.5 800
+
+```
+
+
+## Fig.5b Trichoderma isolates 
+```{r, fig.align='center', fig.height=5.8, fig.width=7, warning=FALSE, message=FALSE}
+
+
+# fungi
+rm(list=ls())
+
+fungi_strain <- data.frame("Genus" = c("Trichoderma", "Humicola", "Penicillium", "Aspergillus", "Papiliotrema", "Mucor"),
+                           "Freq" = c(3,2,4,1,1,1))
+fungi_strain <- fungi_strain[order(fungi_strain$Freq, decreasing = T), ]
+
+
+p <- ggplot(fungi_strain, aes(y = factor(Genus, levels = rev(Genus)), x = Freq, fill = factor(Genus))) + 
+  geom_col(width = 0.6) +
+  scale_fill_manual(values=c("Trichoderma" = "#b4bb72", 
+                              "Humicola" = "#FFD700", 
+                              "Penicillium" = "#86519D", 
+                              "Aspergillus" = "#6495ED", 
+                              "Papiliotrema" = "#d9534f", 
+                              "Mucor" = "#8A4B08"),
+                    guide = "none") +
+  labs(y = "Genus", x = "Number of isolates") +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 34, hjust = 0.5),
+        #axis.title.x = element_text(color = "black", size = 16), 
+        axis.title = element_text(color = "black", size = 30), 
+        axis.text.y = element_text(color = "black", size = 26, face = "italic"),
+        axis.text.x = element_text(color = "black", size = 26),
+        legend.title = element_text(color = "black", size = 30),
+        legend.text = element_text(color = "black", size = 26),
+        strip.text = element_text(color = "black",size = 26),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+print(p)
+# 580 h700
+
+```

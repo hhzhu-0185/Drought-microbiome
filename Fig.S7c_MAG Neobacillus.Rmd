@@ -1,0 +1,138 @@
+---
+title: "Fig.S7c_MAG Neobacillus"
+author: "Huanhuan Zhu"
+date: "2025-09-30"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=5, fig.width=5, warning=FALSE, message=FALSE}
+
+rm(list=ls())
+
+library(circlize)
+library(GenomicFeatures)
+library(tidyverse)
+library(data.table)
+
+setwd("E:/HMME/Metagenome/Result_new/MAG_Neobacillus/1CK_bin93/")
+
+genome.fai <- read.table("prokka/1CK_bin93.fna.fai")
+canu.gs =  genome.fai$V2
+
+chro <- genome.fai$V1
+starts = rep(0, length(canu.gs))
+ends = canu.gs
+genoCir <- data.frame(chr=chro, start=starts, end=ends)
+genoCir$chr <- as.vector(genoCir[,1])
+
+
+circos.clear()
+
+circos.par(start.degree = 87, track.height = 0.02, cell.padding = c(0,0,0,0), gap.degree=c(rep(1,124), 5))
+circos.genomicInitialize(data = genoCir[1:125,],
+                         sector.names = as.character(rep("",125)),
+                         labels.cex = 0.5, track.height = 0.05, plotType = "labels")
+
+circos.trackPlotRegion(ylim = c(0, 1), panel.fun = function(x, y) {
+  sector.index = get.cell.meta.data("sector.index")
+  idx = which(chro[1:125] == sector.index)
+  circos.axis(labels.cex = 0.5,direction = "outside", labels.niceFacing = T, labels = "", minor.ticks = 5, lwd = 0.8, 
+              major.at = c(0, canu.gs[idx]), major.tick.length = 0.4)
+}, track.height = 0.05, bg.border = NA)
+
+
+
+txdb <- makeTxDbFromGFF("prokka/1CK_bin93.gff", format = "auto")
+ge <- genes(txdb)
+ge.df <- data.frame(chr = seqnames(ge), start= start(ge), end=end(ge))%>%
+  filter(chr!="Chr00")
+## calculate gene density in slide windows
+bed.gene <- genomicDensity(region = ge.df, window.size = 1000, overlap = F)
+cc1 = colorRamp2(breaks = c(0, 1), colors = c("white","#4D4D4D"))
+circos.genomicTrackPlotRegion(bed.gene, track.height=0.06, bg.border=NA,
+                              panel.fun = function(region, value, ...){
+                                circos.genomicRect(region, value, col = cc1(value),border = NA, lwd=0.1)
+                              })
+
+mgpgpt <- read.table("prokka/mgPGPT/mgPGPT_1CK_bin93.tsv", sep = "\t")
+setDT(mgpgpt)
+mgpgpt[, V2 := tstrsplit(V2, "_", keep = 1)]
+
+# PGPT richness
+length(unique(mgpgpt$V2))
+
+ge.df2 <- data.frame(chr = seqnames(ge), start= start(ge), end=end(ge), gene=ge@ranges@NAMES)
+ge.df2$gene <- gsub("_gene","", ge.df2$gene)
+ge.df3 <- ge.df2[ge.df2$gene %in% mgpgpt$V1, ]
+
+## calculate gene density in slide windows
+bed.gene <- genomicDensity(region = ge.df3, window.size = 1000, overlap = F)
+cc1 = colorRamp2(breaks = c(0, 1), colors = c("white","#CB181D"))
+circos.genomicTrackPlotRegion(bed.gene, track.height=0.08, bg.border=NA,
+                              panel.fun = function(region, value, ...){
+                                circos.genomicRect(region, value, col = cc1(value),border = NA, lwd=0.1)
+                              })
+
+pgpt_filt <- read.csv("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/mgPGPT/drought_pgpt_filted.csv")
+pathway <- readRDS("E:/Methods/plabase/PlaBAse.rds")
+
+
+osm <- pgpt_filt[pgpt_filt$type2 == "OSMOTIC or SALINITY_STRESS",]$PGPT  # Lv5
+biolfilm <- pgpt_filt[pgpt_filt$type2 == "Biofilm",]$PGPT  # Lv5
+spore <- pgpt_filt[pgpt_filt$type2 == "spore",]$PGPT  # Lv5
+ros <- pgpt_filt[pgpt_filt$type2 == "ROS",]$PGPT  # Lv5
+eps <- pgpt_filt[pgpt_filt$type2 == "eps",]$PGPT  # Lv3
+eps <- unique(pathway[pathway$Lv3 == eps,]$Lv5)
+
+C <- pgpt_filt[pgpt_filt$type2 == "C",]$PGPT  # Lv3
+N <- pgpt_filt[pgpt_filt$type2 == "N",]$PGPT  # Lv3
+P <- pgpt_filt[pgpt_filt$type2 == "P",]$PGPT  # Lv3
+S <- pgpt_filt[pgpt_filt$type2 == "S",]$PGPT  # Lv3
+K <- pgpt_filt[pgpt_filt$type2 == "K",]$PGPT  # Lv3
+siderophores <- pgpt_filt[pgpt_filt$type2 == "siderophores",]$PGPT  # Lv4
+phytohormone <- pgpt_filt[pgpt_filt$type2 == "phytohormone",]$PGPT  # Lv4
+colonization <-  pgpt_filt[pgpt_filt$type2 == "colonization",]$PGPT  # Lv3
+
+drought <- c(osm, biolfilm, spore, ros, eps)
+drought_pgpt <- unique(pathway[pathway$Lv5 %in% drought,]$ID)
+
+
+
+growth_pgpt <- c(C,N,P,S,K,siderophores,phytohormone,colonization)
+
+growth_pgpt3 <- unique(pathway[pathway$Lv3 %in% growth_pgpt,]$ID)
+growth_pgpt4 <- unique(pathway[pathway$Lv4 %in% growth_pgpt,]$ID)
+
+growth_pgpt <- unique(growth_pgpt3,growth_pgpt4)
+
+
+
+ge.df3 <- ge.df2[ge.df2$gene %in% mgpgpt[mgpgpt$V2 %in%drought_pgpt, ]$V1, ]
+
+# PGPT drought gene count
+length(ge.df3$gene)
+
+## calculate gene density in slide windows
+bed.gene <- genomicDensity(region = ge.df3, window.size = 1000, overlap = F)
+cc1 = colorRamp2(breaks = c(0, 1), colors = c("white","#A56B3F"))
+circos.genomicTrackPlotRegion(bed.gene, track.height=0.08, bg.border=NA,
+                              panel.fun = function(region, value, ...){
+                                circos.genomicRect(region, value, col = cc1(value),border = NA, lwd=0.1)
+                              })
+
+
+
+ge.df3 <- ge.df2[ge.df2$gene %in% mgpgpt[mgpgpt$V2 %in%growth_pgpt, ]$V1, ]
+
+# PGPT growth gene count
+length(ge.df3$gene)
+
+## calculate gene density in slide windows
+bed.gene <- genomicDensity(region = ge.df3, window.size = 1000, overlap = F)
+cc1 = colorRamp2(breaks = c(0, 1), colors = c("white","#3D7E0F"))
+circos.genomicTrackPlotRegion(bed.gene, track.height=0.08, bg.border=NA,
+                              panel.fun = function(region, value, ...){
+                                circos.genomicRect(region, value, col = cc1(value),border = NA, lwd=0.1)
+                              })
+
+```

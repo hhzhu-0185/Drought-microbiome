@@ -1,0 +1,196 @@
+---
+title: "Fig.3e_Fungal genome size in control experiment"
+author: "Huanhuan Zhu"
+date: "2025-10-09"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=5.0, fig.width=10.5, warning=FALSE, message=FALSE}
+
+library(ggplot2)
+library(ggpubr)
+library(agricolae) # kruskal for nonparametric test
+library(ggh4x)  # set individual y axis for facet
+library(dplyr)
+
+rm(list=ls())
+
+setwd("E:/HMME/Amplicon/4-data analysis/amplicon(zhh)/Result/Fungi/otu2/")
+
+metadata <- read.csv("sample_metadata.csv")
+
+otu_all0 <- read.csv("otu_fungFlattening_rrncor.csv",row.names = 1, check.names = F)
+#otu_all0 <- otu_all0[rowSums(otu_all0) > 0, ]
+
+table(colSums(otu_all0) >0 )
+
+otu_all0 <- apply(otu_all0, 2, function(x) x / sum(x) * 100)
+table(colSums(otu_all0))
+
+otu_id <- read.csv("HMME.fung.OTU.ID1.csv")
+
+# check NA data
+table(is.na(otu_id$V5_2))
+table(is.na(otu_id$V5_3))
+table(is.na(otu_id$V5_4))
+table(is.na(otu_id$V5_5))
+table(is.na(otu_id$V5_6))
+table(is.na(otu_id$V5_7))
+
+otu_id$V5_2 <- gsub("p__", "p_", otu_id$V5_2)
+otu_id$V5_3 <- gsub("c__", "c_", otu_id$V5_3)
+otu_id$V5_4 <- gsub("o__", "o_", otu_id$V5_4)
+otu_id$V5_5 <- gsub("f__", "f_", otu_id$V5_5)
+otu_id$V5_6 <- gsub("g__", "g_", otu_id$V5_6)
+otu_id$V5_7 <- gsub("s__", "s_", otu_id$V5_7)
+
+
+fungi_traits <- read.csv("traits/rCNV_rlt_taxa_spl_GSGN_edited.csv")
+
+fungi_traits_s <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ Name.y, fungi_traits, FUN = "mean")
+fungi_traits_g <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ Gen, fungi_traits, FUN = "mean")
+fungi_traits_f <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ fam, fungi_traits, FUN = "mean")
+fungi_traits_o <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ ord, fungi_traits, FUN = "mean")
+fungi_traits_c <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ cla, fungi_traits, FUN = "mean")
+fungi_traits_p <- aggregate(cbind(Assembly_Length, Both_ITS_LSU) ~ phy, fungi_traits, FUN = "mean")
+
+fungi_traits_s$level <- "species"
+fungi_traits_g$level <- "genus"
+fungi_traits_f$level <- "family"
+fungi_traits_o$level <- "order"
+fungi_traits_c$level <- "class"
+fungi_traits_p$level <- "phylum"
+
+colnames(fungi_traits_s)[1] <- "taxon"
+colnames(fungi_traits_g)[1] <- "taxon"
+colnames(fungi_traits_f)[1] <- "taxon"
+colnames(fungi_traits_o)[1] <- "taxon"
+colnames(fungi_traits_c)[1] <- "taxon"
+colnames(fungi_traits_p)[1] <- "taxon"
+
+fungi_traits_all <- bind_rows(fungi_traits_s, fungi_traits_g, fungi_traits_f,
+                           fungi_traits_o, fungi_traits_c, fungi_traits_p)
+
+colnames(otu_id)[13:18] <- c("phylum", "class", "order", "family", "genus", "species")
+
+otu_id$taxon_try <- ifelse(otu_id$species %in% fungi_traits_s$taxon, otu_id$species,
+                          ifelse(otu_id$genus %in% fungi_traits_g$taxon, otu_id$genus,
+                                 ifelse(otu_id$family %in% fungi_traits_f$taxon, otu_id$family,
+                                        ifelse(otu_id$order %in% fungi_traits_o$taxon, otu_id$order,
+                                               ifelse(otu_id$class %in% fungi_traits_c$taxon, otu_id$class,
+                                                      ifelse(otu_id$phylum %in% fungi_traits_p$taxon, otu_id$phylum,
+                                                                    NA))))))
+
+otu_id_with_traits <- left_join(otu_id, fungi_traits_all, by = c("taxon_try" = "taxon"))
+
+otu_id_with_traits[is.na(otu_id_with_traits$Assembly_Length), ]$Assembly_Length <- mean(fungi_traits[!is.na(fungi_traits$Assembly_Length), ]$Assembly_Length)
+otu_id_with_traits[is.na(otu_id_with_traits$Both_ITS_LSU), ]$Both_ITS_LSU <- mean(fungi_traits[!is.na(fungi_traits$Both_ITS_LSU), ]$Both_ITS_LSU)
+
+saveRDS(otu_id_with_traits,"otu_id_with_traits.rds")
+
+
+otu_all_gs <- as.data.frame(otu_all0)
+otu_all_gs$id <- rownames(otu_all_gs)
+otu_all_gs <- left_join(otu_all_gs, otu_id_with_traits[,c("OTU.ID", "Assembly_Length")], by=c("id"="OTU.ID"))
+
+
+
+otu_all_gs1 <- otu_all_gs
+for (i in (1:(ncol(otu_all_gs1)-2))){
+  otu_all_gs1[,i] <-  otu_all_gs1[,i] * otu_all_gs1[,ncol(otu_all_gs1)]/100000000
+}
+
+otu_all_gs2 <- as.data.frame(colSums(otu_all_gs1[,1:(ncol(otu_all_gs1)-2)]))
+colnames(otu_all_gs2) <- "genome_size"
+otu_all_gs2$sample.id <- rownames(otu_all_gs2)
+
+
+otu_all_gs2 <- merge(otu_all_gs2, metadata, by="sample.id", all.y=T)
+
+
+treat <- c(C1="Autoclave + Iteration", C2="Autoclave", T="Iteration")
+comp <- c(R="Root", S="Rhizosphere Soil")
+
+
+otu_all_gs2$compartment <- as.factor(otu_all_gs2$compartment)
+otu_all_gs2$generation <- as.factor(otu_all_gs2$generation)
+otu_all_gs2$treatment <- as.factor(otu_all_gs2$treatment)
+
+
+otu_all_gs3 <- otu_all_gs2 %>%
+               filter(compartment == "S" & treatment %in% c("C2","T"))
+
+colnames(otu_all_gs3)[4:6] = c("compartment","type","generation")
+
+
+
+otu_all_gs3$group <- interaction(otu_all_gs3$generation, otu_all_gs3$type)
+
+kruskal_result <- kruskal(otu_all_gs3$genome_size, otu_all_gs3$group, group = TRUE, p.adj = "BH")
+
+letters_df <- kruskal_result$groups %>%
+  mutate(group = rownames(.)) %>%
+  select(group, groups) %>%
+  rename(label = groups)
+
+
+ypos <- otu_all_gs3 %>%
+  group_by(group) %>%
+  reframe(y = max(genome_size), type=type, generation=generation) %>%
+  left_join(letters_df, by = "group")
+
+ypos[ypos$group=="3.C2",]$y = 37.2
+ypos[ypos$group=="3.T",]$y = 36.6
+ypos[ypos$group=="0.C2",]$y = 43.2
+
+ypos[ypos$type == "C2",]$y = ypos[ypos$type == "C2",]$y + 1
+
+
+chisq_val <- kruskal_result$statistics[["Chisq"]]
+p_val <- kruskal_result$statistics[["p.chisq"]]
+
+rp.value <- sprintf("italic(p) == %.2f %%*%% 10^%.0f ~ (italic(chi^2) == %.3g)", 
+                    p_val / 10^floor(log10(p_val)), 
+                    floor(log10(p_val)), 
+                    chisq_val)
+
+
+##################
+kruskal_res <- kruskal.test(genome_size ~ group, data = otu_all_gs3)
+
+chi_sq <- round(kruskal_res$statistic, 2)   # 卡方
+p_val  <- kruskal_res$p.value
+df <- kruskal_res$parameter
+
+label_text <- sprintf("chi^2 * '(' * 'df = %d' * ')' == %g * ',' ~ italic(p) == %s", 
+                      df, chi_sq, formatC(p_val, format="e", digits=2))
+
+p <- ggplot(data = otu_all_gs3, aes(x = generation, y = genome_size, color = factor(type))) +
+  geom_boxplot(position = position_dodge(width = 0.75), outlier.shape = NA) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75),
+              size = 1, alpha = 0.7) +
+  geom_text(data = ypos, aes(x = generation, y = y + 1.2, label = label, group = type), 
+            position = position_dodge(width = 0.75), size = 8, color="black") +
+  scale_color_manual(name="Treatment", values = c("blue", "red"),labels=c(
+    "C2"="Non-iterative drought (control)",
+    "T"="Iterative drought"
+  )) +
+  ylim(29.7, 47.5) +
+  labs(x = "Generation", y = "CWM genome size (Mb)", title = "Fungi") +
+  ggplot2::annotate("text", x = 2, y = 47, label = label_text, size = 8, hjust = 0.22, parse = TRUE) +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 30, hjust = 0.5),
+        #axis.title.x = element_text(color = "black", size = 16), 
+        axis.title = element_text(color = "black", size = 26), 
+        axis.text.y = element_text(color = "black", size = 22),
+        axis.text.x = element_text(color = "black", size = 22),
+        legend.title = element_text(color = "black", size = 26),
+        legend.text = element_text(color = "black", size = 22),
+        strip.text = element_text(color = "black",size = 22),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+print(p)
+
+
+```

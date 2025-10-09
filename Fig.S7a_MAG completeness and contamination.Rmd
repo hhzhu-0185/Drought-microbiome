@@ -1,0 +1,76 @@
+---
+title: "Fig.S7a_MAG completeness and contamination"
+author: "Huanhuan Zhu"
+date: "2025-09-20"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=6.5, fig.width=6.5, warning=FALSE, message=FALSE}
+
+library(ggtreeExtra)
+library(ggnewscale)
+library(scales)
+library(gridExtra)
+library(ggplot2)
+
+rm(list=ls())
+
+
+mag_info <- read.table("E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/checkm2/quality_report.tsv", sep = "\t", header = T)
+
+main <- ggplot(mag_info[mag_info$Name != "1CK_bin144",], aes(x=Completeness, y=Contamination))+
+        labs(x = "Completeness (%)", y = "Contamination (%)") +
+        geom_vline(xintercept = 90, linewidth = 0.6, linetype = "dashed", color = "red") +
+        geom_hline(yintercept = 5, linewidth = 0.6, linetype = "dashed", color = "red") +
+        geom_point(alpha=0.6) +
+        #scale_y_continuous(labels = scales::label_number(accuracy = 0.1)) +
+        theme_bw() +
+        theme(
+          axis.title = element_text(size = 22, color = "black"),
+          axis.text =  element_text(size = 18, color = "black")
+        )
+
+
+comple <- ggplot(mag_info[mag_info$Name != "1CK_bin144",], aes(x=Completeness))+
+          geom_histogram(binwidth = 1, fill = "#4682B4", color = "black") + # `binwidth = 1` 表示每个x单位作为???个bin
+          labs(x = NULL, y = "Counts") +
+          geom_vline(xintercept = 90, linewidth = 0.6, linetype = "dashed", color = "red") +
+          theme_classic() +
+          theme(
+            axis.title = element_text(size = 22, color = "black"),
+            axis.text.x = element_blank(),
+            axis.text.y =  element_text(size = 18, color = "black")
+          )
+  
+contam <- ggplot(mag_info[mag_info$Name != "1CK_bin144",], aes(y=Contamination))+
+          geom_histogram(binwidth = 0.4, fill = "#4682B4", color = "black") + # `binwidth = 1` 表示每个x单位作为???个bin
+          labs(x = "Counts", y = NULL) +
+          geom_hline(yintercept = 5, linewidth = 0.6, linetype = "dashed", color = "red") +
+          theme_classic() +
+          theme(
+            axis.title = element_text(size = 22, color = "black"),
+            axis.text.x =  element_text(size = 18, color = "black", angle = 90, vjust = 0.5),
+            axis.text.y = element_blank()
+          )
+
+
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme_void()
+
+
+main <- main +
+  scale_x_continuous(expand = c(0.06,0.06)) +
+  scale_y_continuous(expand = c(0.06,0.06))
+
+comple <- comple +
+  scale_x_continuous(expand = c(0.04,0.04))
+
+contam <- contam +
+  scale_y_continuous(expand = c(0.05,0.05))
+
+grid.arrange( comple,blankPlot, main, contam,
+             ncol=2, nrow=2, widths=c(4, 1), heights=c(1, 4))
+
+# 650 650
+
+```

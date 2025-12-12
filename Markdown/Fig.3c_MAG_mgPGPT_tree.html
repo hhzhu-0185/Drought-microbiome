@@ -13,7 +13,7 @@
 
 <meta name="date" content="2025-09-25" />
 
-<title>Fig.4c_MAG_mgPGPT_tree</title>
+<title>Fig.3c_MAG_mgPGPT_tree</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -350,7 +350,7 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Fig.4c_MAG_mgPGPT_tree</h1>
+<h1 class="title toc-ignore">Fig.3c_MAG_mgPGPT_tree</h1>
 <h4 class="author">Huanhuan Zhu</h4>
 <h4 class="date">2025-09-25</h4>
 
@@ -377,7 +377,6 @@ mag_abundance &lt;- read.table(&quot;E:/HMME/Metagenome/Result_new/bin/bin_derep
                             sep = &quot;\t&quot;, header = T, check.names = F, row.names = 1)
 
 mag_abundance &lt;- as.data.frame(t(mag_abundance))
-
 
 
 metadata &lt;- data.frame(&quot;id&quot; = rownames(mag_abundance), &quot;group&quot; = substr(rownames(mag_abundance),1,1))
@@ -717,11 +716,9 @@ compare</code></pre>
 mag_tree &lt;- ggtree::read.tree(&quot;E:/HMME/Metagenome/Result_new/bin/bin_dereplecated/gtdbtk_skip_ani/gtdbtk.backbone.bac120.classify.tree&quot;)
 
 
-# 假设你已经加载了一个系统发育树对象 mag_tree
 gca_rs_tips &lt;- mag_tree$tip.label[grepl(&quot;^(GCA|RS|GB)&quot;, mag_tree$tip.label)]
 keep_tip &lt;- bin_info$user_genome
 
-# 使用 drop.tip 删除这些物种
 mag_tree_filtered &lt;- drop.tip(mag_tree, gca_rs_tips)
 mag_tree_filtered &lt;- keep.tip(mag_tree_filtered, keep_tip)
 
@@ -738,14 +735,14 @@ mag_tree_filtered &lt;- keep.tip(mag_tree_filtered, keep_tip)
                               &quot;Armatimonadota&quot; = &quot;#FFD700&quot;,
                               &quot;Actinomycetota&quot; = &quot;#2196F3&quot;,
                               &quot;Cyanobacteriota&quot; = &quot;#8A4B08&quot;,
-                              &quot;Patescibacteria&quot; = &quot;#FF7F00&quot;, # orange
+                              &quot;Patescibacteria&quot; = &quot;#FF7F00&quot;,
                               &quot;Chlamydiota&quot; = &quot;#d9534f&quot;,
                               &quot;Verrucomicrobiota&quot; = &quot;#86519D&quot;,
-                              &quot;Bacteroidota&quot; = &quot;#1B9E77&quot;, # dark teal
+                              &quot;Bacteroidota&quot; = &quot;#1B9E77&quot;,
                               &quot;Gemmatimonadota&quot; = &quot;#EE4C97&quot;,
                               &quot;Planctomycetota&quot; = &quot;#3B3B98&quot;,
                               &quot;Acidobacteriota&quot; = &quot;#2B5A41&quot;,
-                              &quot;Pseudomonadota&quot; = &quot;#E41A1C&quot;, # red
+                              &quot;Pseudomonadota&quot; = &quot;#E41A1C&quot;,
                               &quot;Bdellovibrionota&quot; = &quot;#b4bb72&quot;,
                               &quot;Myxococcota&quot; = &quot;#b23256&quot;))</code></pre>
 <pre><code>## &lt;ggproto object: Class ScaleDiscrete, Scale, gg&gt;
@@ -836,7 +833,7 @@ p &lt;-  rotate_tree(tree_plot, angle = -8.7) +
   scale_fill_gradientn(
     name=&quot;PGPT richness&quot;, 
     colours = c(
-      &quot;#08306B&quot;,  # 深蓝
+      &quot;#08306B&quot;,
       &quot;#08519C&quot;,
       &quot;#2171B5&quot;,
       &quot;#4292C6&quot;,
@@ -845,7 +842,7 @@ p &lt;-  rotate_tree(tree_plot, angle = -8.7) +
       &quot;#FC9272&quot;,
       &quot;#FB6A4A&quot;,
       &quot;#EF3B2C&quot;,
-      &quot;#CB181D&quot;,   # 深红
+      &quot;#CB181D&quot;,
       &quot;darkred&quot;
     ), 
     values = scales::rescale(c(0, 0.2, 0.4, 0.6, 0.8, 1)),
@@ -853,8 +850,8 @@ p &lt;-  rotate_tree(tree_plot, angle = -8.7) +
       direction = &quot;horizontal&quot;,
       title.position = &quot;top&quot;,
       title.hjust = 0,
-      barwidth = unit(5, &quot;cm&quot;),  # 可选：控制图例宽度
-      barheight = unit(0.4, &quot;cm&quot;), # 可选：控制图例高度
+      barwidth = unit(5, &quot;cm&quot;),  
+      barheight = unit(0.4, &quot;cm&quot;), 
       order = 5
       )
   ) +
@@ -897,8 +894,8 @@ p &lt;-  rotate_tree(tree_plot, angle = -8.7) +
       direction = &quot;horizontal&quot;,
       title.position = &quot;top&quot;,
       title.hjust = 0,
-      barwidth = unit(5, &quot;cm&quot;),  # 可选：控制图例宽度
-      barheight = unit(0.4, &quot;cm&quot;), # 可选：控制图例高度
+      barwidth = unit(5, &quot;cm&quot;),  
+      barheight = unit(0.4, &quot;cm&quot;), 
       order = 4
       )
   ) +
@@ -941,8 +938,8 @@ p &lt;-  rotate_tree(tree_plot, angle = -8.7) +
       direction = &quot;horizontal&quot;,
       title.position = &quot;top&quot;,
       title.hjust = 0,
-      barwidth = unit(5, &quot;cm&quot;),  # 可选：控制图例宽度
-      barheight = unit(0.4, &quot;cm&quot;), # 可选：控制图例高度
+      barwidth = unit(5, &quot;cm&quot;),  
+      barheight = unit(0.4, &quot;cm&quot;), 
       order = 3
     ),
   ) +

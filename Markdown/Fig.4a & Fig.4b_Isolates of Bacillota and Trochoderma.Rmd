@@ -1,0 +1,162 @@
+---
+title: "Fig.4a & Fig.4b_Isolates of Bacillota and Trochoderma"
+author: "Huanhuan Zhu"
+date: "2025-10-17"
+output: html_document
+---
+
+
+## Fig.4a Phylogeny tree of Bacillota isolates and enriched OTUs 
+```{r, fig.align='center', fig.height=8, fig.width=10.5, warning=FALSE, message=FALSE}
+
+library(ggtree)
+library(ape)
+library(ggtreeExtra)
+library(ggnewscale)
+library(scales)
+library(ggplot2)
+
+aln <- read.dna("E:/HMME/Amplicon/5-strain screeing/final tree/bacteria/mafft/bacteria_filtered_aligned.fa", format="fasta")
+
+dist_mat <- dist.dna(aln, model = "N") 
+
+hc <- hclust(as.dist(dist_mat), method = "average")
+
+tree <- as.phylo(hc)
+
+
+tree$tip.label
+
+tree$tip.label <- c(
+  "italic('Peribacillus')~'sp. (Isolate_28)'",
+  "italic('Pseudomonas')~'sp. (Isolate_36)'",
+  "italic('Sphingomonas')~'sp. (Isolate_39)'",
+  "italic('Bacillus')~'sp. (Isolate_29)'",
+  "italic('Enterobacter')~'sp. (Isolate_30)'",
+  "italic('Bacillus')~' sp. (Isolate_26)'",
+  "italic('Neobacillus')~'sp. (Isolate_14)'",
+  "italic('Neobacillus')~'sp. (OTU_3)'",
+  "italic('Paenibacillus')~' sp. (OTU_49)'",
+  "italic('Oxalophagus')~' sp. (OTU_97)'",
+  "italic('Metabacillus')~' sp. (OTU_173)'",
+  "italic('Lysinibacillus')~' sp. (OTU_167)'"
+)
+
+new_order <- c(
+  "Lysinibacillus .sp (OTU_167)",
+  "Bacillus cereus G9241 (Isolate_26)",
+  "Bacillus butanolivorans (Isolate_28)",
+  "Bacillus drentensis (OTU_3)",
+  "Bacillus drentensis (Isolate_14)",
+  "Metabacillus .sp (OTU_173)",
+  "Bacillus safensis (Isolate_29)",
+  "Oxalophagus .sp (OTU_97)",
+  "Enterobacter cloacae (Isolate_30)",
+  "Pseudomonas batumici (Isolate_36)",
+  "Paenibacillus .sp (OTU_49)", 
+  "Novosphingobium capsulatum (Isolate_39)"
+)
+
+library(ggtree)
+p <- ggtree(tree, size = 0.5, ladderize = FALSE) %<+% data.frame(label = rev(new_order)) +
+  geom_aline(linetype = "dotted", color = "gray", linewidth = 0.5) +
+  #geom_treescale(x = 0.000, y = 1,  linesize = 0.5, fontsize = 8, width = 0.05, offset = -0.6) +
+  geom_tiplab(size = 8, align = TRUE, linetype = NA, hjust = 0,offset = 2, parse =TRUE) +
+  xlim(0, max(tree$edge.length) + 100)  # ?????冶叩目占?
+
+p2<-ggtree::rotate(p,14)
+p3 <- ggtree::rotate(p2,15)
+
+tree_data <- p$data
+group <-data.frame(
+  "name" = tree_data$label[1:12], 
+  "Phylum" = c("Bacillota",
+               "Pseudomonadota",
+               "Pseudomonadota",
+               "Bacillota",
+               "Pseudomonadota",
+               "Bacillota",
+               "Bacillota",
+               "Bacillota",
+               "Bacillota",
+               "Bacillota",
+               "Bacillota",
+               "Bacillota"),
+  "Type" = c(rep(c("Isolate",
+                   "OTU"),c(7,5))))
+group$Phylum <- as.factor(group$Phylum)
+
+
+p3 +
+  geom_fruit(
+    data = group,
+    geom = geom_point,
+    aes(y = name, x = 1, color =  factor(Phylum), shape = factor(Type)),
+    size=5,
+    pwidth = 2.7,
+    stroke = 3,
+  ) +
+  ggplot2:: scale_color_manual(
+    name="Phylum", 
+    values = c(
+      "Bacillota" = "#4daf4a",
+      "Pseudomonadota" = "#d95f02"
+    )) +
+  ggplot2::scale_shape_manual(
+    name="Source", 
+    values = c(
+      "Isolate" = 8,
+      "OTU" = 19
+    )) +
+  xlim_tree(0.5)  +
+  theme(plot.margin = margin(r = 50),
+        legend.title = element_text(size=26),
+        legend.text = element_text(size=22),
+        legend.position = "bottom",  
+        legend.justification = c(0, 0.5), 
+        legend.background = element_rect(fill = "transparent")  
+  )
+# 1050 800
+# 10.5 800
+
+```
+
+
+## Fig.4b Trichoderma isolates 
+```{r, fig.align='center', fig.height=5.8, fig.width=7, warning=FALSE, message=FALSE}
+
+
+# fungi
+rm(list=ls())
+
+fungi_strain <- data.frame("Genus" = c("Trichoderma", "Humicola", "Penicillium", "Aspergillus", "Papiliotrema", "Mucor"),
+                           "Freq" = c(3,2,4,1,1,1))
+fungi_strain <- fungi_strain[order(fungi_strain$Freq, decreasing = T), ]
+
+
+p <- ggplot(fungi_strain, aes(y = factor(Genus, levels = rev(Genus)), x = Freq, fill = factor(Genus))) + 
+  geom_col(width = 0.6) +
+  scale_fill_manual(values=c("Trichoderma" = "#b4bb72", 
+                              "Humicola" = "#FFD700", 
+                              "Penicillium" = "#86519D", 
+                              "Aspergillus" = "#6495ED", 
+                              "Papiliotrema" = "#d9534f", 
+                              "Mucor" = "#8A4B08"),
+                    guide = "none") +
+  labs(y = "Genus", x = "Number of isolates") +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 34, hjust = 0.5),
+        #axis.title.x = element_text(color = "black", size = 16), 
+        axis.title = element_text(color = "black", size = 30), 
+        axis.text.y = element_text(color = "black", size = 26, face = "italic"),
+        axis.text.x = element_text(color = "black", size = 26),
+        legend.title = element_text(color = "black", size = 30),
+        legend.text = element_text(color = "black", size = 26),
+        strip.text = element_text(color = "black",size = 26),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+print(p)
+# 580 h700
+
+```

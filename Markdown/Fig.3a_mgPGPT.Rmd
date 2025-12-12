@@ -1,0 +1,285 @@
+---
+title: "Fig.3a_mgPGPT"
+author: "Huanhuan Zhu"
+date: "2025-10-09"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=21, fig.width=15, warning=FALSE, message=FALSE}
+
+library(tidyverse)
+library(ggplot2)
+library(tibble)
+library(edgeR)
+library(data.table)
+library(patchwork)
+library(forcats)
+library(ggh4x)
+library(scales)
+
+rm(list=ls())
+
+setwd("E:/HMME/Metagenome/Result_new/mgPGPT/")
+##????otu table?????
+ko_all <- read.table("mgPGPT.summarizeAbundance.count.sseqid.raw.txt",
+                     check.names = F,
+                     row.names = 1,
+                     header = T)
+#ko_all <- ko_all[2:nrow(ko_all),]
+ko_all_up <- ko_all
+ko_all_up <- ko_all_up[,grepl("TS",colnames(ko_all_up))]
+
+set.seed(123)
+count_data <- ko_all_up
+#count_data <- count_data[,grepl("TS",colnames(count_data))]
+
+count_data <- round(count_data)
+
+col_data <- data.frame(
+  sample = colnames(count_data),
+  drought = as.numeric(substr(colnames(count_data),1,1))
+)
+rownames(col_data) <- col_data$sample
+
+dge <- DGEList(counts = count_data, group = col_data$drought)
+
+keep <- filterByExpr(dge)
+dge <- dge[keep,, keep.lib.sizes=FALSE]
+
+dge <- calcNormFactors(dge, method = "TMM")
+
+cpm_norm <- cpm(dge, normalized.lib.sizes = TRUE)
+
+plotMDS(dge, dim = c(1, 2))
+
+design <- model.matrix(~ col_data$drought)
+
+dge <- estimateDisp(dge, design, robust = TRUE) 
+
+plotBCV(dge)
+
+fit <- glmFit(dge, design, robust = TRUE) 
+lrt <- glmLRT(fit)
+
+res <- topTags(lrt, n = Inf)
+
+
+
+res_df <- res$table
+res_df$KO <- rownames(res_df)
+
+res_sig <- res_df[res_df$FDR < 0.05, ]
+
+res_sig$group <- "Up"
+res_sig$group[res_sig$logFC < 0] <- "Down"
+
+pathway <- readRDS("E:/Methods/plabase/PlaBAse.rds")
+#pathway <- column_to_rownames(pathway, "S.NO")
+
+res_sig <- left_join(res_sig, pathway, by=c("KO"="ID"))
+res_sig$Lv3_rename <- gsub("\\|","_",res_sig$Lv3)
+res_sig$id <- paste0(res_sig$group, "_", res_sig$Lv3_rename)
+
+for (i in unique(res_sig$id)){
+  res_sig_tmp <- res_sig[res_sig$id == i,c("KO")]
+  write.table(res_sig_tmp, paste0("E:/HMME/Metagenome/Result_new/mgPGPT/group/",i,".txt"), row.names = FALSE, quote = FALSE, col.names = FALSE)
+}
+
+pathway1 <- pathway
+pathway1$Lv3 <- gsub("\\|","_",pathway1$Lv3)
+for (i in unique(pathway1$Lv3)){
+  res_sig_tmp <- pathway1[pathway1$Lv3 == i,c("ID")]
+  write.table(res_sig_tmp, paste0("E:/HMME/Metagenome/Result_new/mgPGPT/group_all/",i,".txt"), row.names = FALSE, quote = FALSE, col.names = FALSE)
+}
+
+res_df$group <- "Not significant"
+res_df$group[res_df$logFC > 0 & res_df$FDR < 0.05] <- "Up"
+res_df$group[res_df$logFC < 0 & res_df$FDR < 0.05] <- "Down"
+
+tbl <- table(res_df$group)
+
+txt <- paste0(
+  "Up = ", tbl["Up"], "\n",
+  "Down = ", tbl["Down"], "\n",
+  "Not significant = ", tbl["Not significant"]
+)
+
+res_df <- left_join(res_df, pathway, by=c("KO"="ID"))
+
+table(res_df[res_df$logFC > 0 & res_df$FDR < 0.05,]$Lv3)
+
+test1 <- as.data.frame(table(res_df[res_df$logFC > 0 & res_df$FDR < 0.05,]$Lv3))
+test <- as.data.frame(table(res_df[res_df$logFC < -0.5 & res_df$FDR < 0.05,]$Lv3))
+
+
+cpm_norm2 <- as.data.frame(cpm_norm[res_sig$KO,]) 
+cpm_norm2$ID <- row.names(cpm_norm2)
+
+cpm_norm2 <- left_join(cpm_norm2, res_sig[,c("group", "KO", "Lv3")], by=c("ID" = "KO"))
+cpm_norm2 <- aggregate(.~group+Lv3, cpm_norm2[,c(1:35,37:38)], FUN="sum")
+
+
+sample_cols <- grep("\\.quant$", names(cpm_norm2), value = TRUE)
+
+all_combos <- expand.grid(
+  Lv3 = unique(cpm_norm2$Lv3),
+  group = c("Up", "Down"),
+  stringsAsFactors = FALSE
+)
+
+df_full <- all_combos %>%
+  left_join(cpm_norm2, by = c("Lv3", "group")) %>%
+  mutate(across(all_of(sample_cols), ~replace_na(., 0)))
+
+df_full
+
+cpm_norm2 <- df_full
+
+cpm_norm2 <- reshape2::melt(cpm_norm2, id=c("group","Lv3"))
+cpm_norm2$variable <- substr(cpm_norm2$variable, 1, 1)
+
+up_lv3 <- cpm_norm2 %>% filter(group == "Up") %>% pull(Lv3)
+down_lv3 <- cpm_norm2 %>% filter(group == "Down") %>% pull(Lv3)
+
+common_lv3 <- intersect(up_lv3, down_lv3)
+diff_lv3 <- setdiff(c(up_lv3, down_lv3), intersect(up_lv3, down_lv3))
+
+df <- NULL
+for (i in unique(common_lv3)){
+  result <- t.test(cpm_norm2[cpm_norm2$Lv3 == i & cpm_norm2$group == "Up",]$value, 
+                   cpm_norm2[cpm_norm2$Lv3 == i & cpm_norm2$group == "Down",]$value)
+  df_tmp <- data.frame("name"=i, "p"=result$p.value, "value" = (mean(cpm_norm2[cpm_norm2$Lv3 == i & cpm_norm2$group == "Up",]$value) -
+                                                                  mean(cpm_norm2[cpm_norm2$Lv3 == i & cpm_norm2$group == "Down",]$value)))
+  df <- rbind(df, df_tmp)
+}
+
+df$p <- p.adjust(df$p, method = "fdr")
+
+df2 <- df
+
+df2$type = "Up"
+df2[df2$p > 0.05,]$type = "Stable"
+df2[df2$value < 0,]$type = "Down"
+
+df2 <- df2[,c("name","type")]
+
+##df_no < data.frame("name"= diff_lv3, "type" = "Stable")
+##df2<- bind(df2, df_no)
+df2$name <- tolower(df2$name)
+df2$type <- factor(df2$type, levels = c("Up","Down","Stable"))
+cpm_norm2 <- aggregate(value~group+Lv3+variable, cpm_norm2, FUN="mean")
+
+pathway2 <- pathway[,c("Lv2", "Lv3")]
+pathway2 <- pathway2[!duplicated(pathway2$Lv3),]
+
+cpm_norm2 <- left_join(cpm_norm2, pathway2, by="Lv3")
+
+cpm_norm2$Lv2 <- tolower(cpm_norm2$Lv2)
+cpm_norm2$Lv3 <- tolower(cpm_norm2$Lv3)
+
+cpm_norm2 <- cpm_norm2 %>%
+  group_by(Lv3) %>%
+  mutate(value_scaled = as.numeric(scale(value))) %>%
+  ungroup()
+
+order_new <- aggregate(value_scaled~Lv3+Lv2, cpm_norm2[cpm_norm2$group =="Up",], FUN="mean")
+
+order_new <- order_new %>%
+  arrange(Lv2, desc(value_scaled)) %>%
+  mutate(Lv3 = factor(Lv3, levels = unique(Lv3)))
+
+
+# label color
+cpm_norm2[cpm_norm2$group == "Up",]$group = "Increase"
+cpm_norm2[cpm_norm2$group == "Down",]$group = "Decrease"
+
+
+main<- ggplot(cpm_norm2, aes(x=factor(variable), y = factor(Lv3, levels = rev(c(order_new$Lv3))), fill= value_scaled)) +
+  geom_tile(color = "white") +
+  facet_wrap(
+    ~ factor(group, levels=c("Increase", "Decrease")),
+    ncol = 2
+  ) +
+  scale_fill_gradientn(
+    colours = c("black","darkblue","blue","skyblue", "orange", "red", "darkred"),
+    values = scales::rescale(c(min(log(cpm_norm2$value)), 
+                               quantile(log(cpm_norm2$value), 0.19),
+                               median(log(cpm_norm2$value)),
+                               quantile(log(cpm_norm2$value), 0.74),
+                               max(log(cpm_norm2$value))),
+                             na.value = "grey90"
+    )) +
+  labs(x = "Generation", y = NULL, fill = " Scaled abundance") +
+  theme_void() +
+  theme(
+    axis.text.x = element_text(size=26, angle = 0, hjust = 0.5),
+    strip.text = element_text(size=34),
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size=30),
+    legend.key.height = unit(1.5, "cm"),
+    legend.key.width = unit(0.8, "cm"),
+    legend.title = element_text(size = 30, hjust = 0.06),
+    legend.text = element_text(size = 26) 
+  )
+main
+
+colors <- c(
+  "#FFD700", "#2196F3", "#8A4B08",
+  "#FF7F00", "#86519D", "#1B9E77", 
+  "#3B3B98", "#E41A1C")
+
+
+function_group <- ggplot(cpm_norm2, aes(x = "", 
+                                        y = factor(Lv3, levels = rev(c(order_new$Lv3))),color = Lv2)) +
+  geom_point(size=9) +
+  labs(y="Lv3") +
+  scale_color_manual(name="mgPGPT level 2", values = colors, guide = guide_legend(size=5))+
+  scale_x_discrete(expand = expansion(mult = c(0.01, 0.01))) +
+  scale_y_discrete(position = "left") +
+  theme_void() +
+  theme( 
+    axis.text.y = element_text(size=24, hjust = 1, margin = margin(r = 5)),
+    legend.title = element_text(size = 30),
+    legend.text = element_text(size = 26),
+    legend.key.height = unit(30, "pt"))
+#+theme(axis.text.y = element_text(size=8, hjust = 1))
+
+function_group
+
+
+function_group2 <- ggplot(df2, aes(x = "", 
+                                        y = factor(name, levels = rev(c(order_new$Lv3))),color = type)) +
+  geom_point(size=8, shape = 17) +
+  labs(y="Lv3") +
+  scale_color_manual(name="Significance", values = c(
+    "Up" = "#cd1936",
+    "Down"="#1445f8",
+    "Stable" = "gray"
+  ), labels=c(
+    "Up" = "Higher in increase group",
+    "Down"="Higher in decrease group",
+    "Stable" = "Not significant"
+  ),guide = guide_legend(size=5))+
+  scale_x_discrete(expand = expansion(mult = c(0.01, 0.01))) +
+  theme_void()+
+  theme( 
+    axis.text.y = element_blank(),
+    legend.title = element_text(size = 30),
+    legend.text = element_text(size = 26),
+    legend.key.height = unit(30, "pt"))
+#+theme(axis.text.y = element_text(size=8, hjust = 1))
+
+function_group2
+
+
+p <- (function_group|function_group2|main) +plot_layout(guides = "collect",widths = c( 0.7, 0.7, 10)) &
+  theme(plot.margin = margin(l=10),
+        legend.position = "bottom", 
+        legend.justification = c(1,1),
+        legend.direction="vertical",
+        legend.box.margin = margin(t = 30))
+
+# 21 15
+print(p)
+
+```

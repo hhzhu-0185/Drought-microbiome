@@ -1,0 +1,221 @@
+---
+title: "Fig.S1a_Prokaryotic genome size each site in field"
+author: "Huanhuan Zhu"
+date: "2025-09-20"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=5, fig.width=12, warning=FALSE, message=FALSE}
+
+
+library(splitstackshape)
+library(patchwork)
+library(tibble)
+library(reshape2)
+library(ggpubr)
+library(linkET)
+library(agricolae) # kruskal for nonparametric test
+library(ggh4x)  # set individual y axis for facet
+library(ggplot2)
+library(tidyverse)
+library(gghalves)
+library(ggsignif)
+library(rstatix)
+library(data.table)
+library(tidyr)
+library(dplyr)
+
+
+rm(list=ls())
+setwd("E:/Functrait/Result/Bacteria/otu2/gtdb/")
+
+
+# read result blast
+blast <- read.csv("qiime2/taxonomy.tsv", sep = "\t")  
+blast <- blast[!duplicated(blast$Feature.ID),]
+blast <- blast %>% separate(Taxon, c("domain","phylum","class","order","family","genus","species"), sep = ";")
+
+# read metadata of GTDB
+# read metadata of GTDB
+# metadata_bac <- as.data.frame(fread("D:/database/gtdb/bac120_metadata_r226.tsv"))
+# metadata_arc <- as.data.frame(fread("D:/database/gtdb/ar53_metadata_r226.tsv"))
+# metadata <- rbind(metadata_bac,metadata_arc)
+# saveRDS(metadata,"E:/Functrait/code2-new/metadata_functraits.RDS")
+metadata <- readRDS("E:/Functrait/code2-new/metadata_functraits.RDS")
+
+metadata1 <- metadata[,c("gtdb_taxonomy","genome_size","gc_percentage")]
+metadata1 <- metadata1 %>% separate(gtdb_taxonomy, c("domain","phylum","class","order","family","genus","species"), sep = ";")
+
+
+metadata1_s <- aggregate(cbind(genome_size, gc_percentage) ~ species, metadata1, FUN = "mean")
+metadata1_g <- aggregate(cbind(genome_size, gc_percentage) ~ genus, metadata1, FUN = "mean")
+metadata1_f <- aggregate(cbind(genome_size, gc_percentage) ~ family, metadata1, FUN = "mean")
+metadata1_o <- aggregate(cbind(genome_size, gc_percentage) ~ order, metadata1, FUN = "mean")
+metadata1_c <- aggregate(cbind(genome_size, gc_percentage) ~ class, metadata1, FUN = "mean")
+metadata1_p <- aggregate(cbind(genome_size, gc_percentage) ~ phylum, metadata1, FUN = "mean")
+metadata1_d <- aggregate(cbind(genome_size, gc_percentage) ~ domain, metadata1, FUN = "mean")
+# metadata <- readRDS("E:/Functrait/code2-new/metadata_functraits.RDS")
+
+
+metadata1_s$level <- "species"
+metadata1_g$level <- "genus"
+metadata1_f$level <- "family"
+metadata1_o$level <- "order"
+metadata1_c$level <- "class"
+metadata1_p$level <- "phylum"
+metadata1_d$level <- "domain"
+
+
+colnames(metadata1_s)[1] <- "taxon"
+colnames(metadata1_g)[1] <- "taxon"
+colnames(metadata1_f)[1] <- "taxon"
+colnames(metadata1_o)[1] <- "taxon"
+colnames(metadata1_c)[1] <- "taxon"
+colnames(metadata1_p)[1] <- "taxon"
+colnames(metadata1_d)[1] <- "taxon"
+
+
+metadata1_all <- bind_rows(metadata1_s, metadata1_g, metadata1_f,
+                           metadata1_o, metadata1_c, metadata1_p, metadata1_d)
+
+
+blast$taxon_try <- ifelse(blast$species %in% metadata1_s$taxon, blast$species,
+                          ifelse(blast$genus %in% metadata1_g$taxon, blast$genus,
+                                 ifelse(blast$family %in% metadata1_f$taxon, blast$family,
+                                        ifelse(blast$order %in% metadata1_o$taxon, blast$order,
+                                               ifelse(blast$class %in% metadata1_c$taxon, blast$class,
+                                                      ifelse(blast$phylum %in% metadata1_p$taxon, blast$phylum,
+                                                             ifelse(blast$domain %in% metadata1_d$taxon, blast$domain,
+                                                                    NA)))))))
+
+blast_with_traits <- left_join(blast, metadata1_all, by = c("taxon_try" = "taxon"))
+
+
+table(is.na(blast_with_traits$genome_size))
+table(is.na(blast_with_traits$gc_percentage))
+
+
+# read rarefied otu table
+otu_table <- as.data.frame(fread("../otu_bacteriaFlattening_rrncor.csv"))
+otu_table1 <- otu_table %>% separate(V1, into = c("First", "Second"), "[.]")
+
+
+otu_table2 <- merge(otu_table1,blast_with_traits[,c("Feature.ID","genome_size","gc_percentage")],by.x = "First",by.y = "Feature.ID")
+#saveRDS(blast_with_traits,"E:/Functrait/Result/Bacteria/otu2/gtdb/blast_gtdb.RDS")
+
+table(is.na(otu_table2$genome_size))
+otu_table2 <- otu_table2[!is.na(otu_table2$genome_size),]
+
+
+colnames(otu_table2)[1946]
+
+# min(colSums(otu_table2[,3:1946]))
+# mean(colSums(otu_table2[,3:1946]))
+# max(colSums(otu_table2[,3:1946]))
+
+colnames(otu_table2)[1946]
+#2045 1800
+
+### 1 calculate avergae genome size 
+my_gs <- function(name){
+  
+  otu_table3 <- otu_table2
+  otu_table3[,3:1946] <- apply(otu_table3[,3:1946],2,function(x) x/sum(x))  # percentage by column
+  colSums(otu_table3[,3:1946])  # check if the sum of each column is equal to 1
+  
+  # average genome size
+  for(i in 3:1946){  
+    otu_table3[,i] <- otu_table3[,i]*otu_table3[,name]
+  }
+  
+  genomesize_ave <- as.data.frame(colSums(otu_table3[,3:1946]))
+  
+  genomesize_ave3 <- genomesize_ave
+  genomesize_ave3$sample.id <- rownames(genomesize_ave3)
+  names(genomesize_ave3)[1] <- "genome_size"
+  genomesize_ave3 <<- genomesize_ave3
+}
+
+my_gs("genome_size")
+
+group <- read.csv("E:/Functrait/Result/metadata/metadata.csv")
+
+genomesize_ave3 <- merge(genomesize_ave3, group, by.x="sample.id", by.y="runningSampleID")
+
+
+ai2000_site <- aggregate(ai2000~site,genomesize_ave3,FUN = "mean")
+ai2000_site$ai2000 <- (1/ai2000_site$ai2000)
+
+set.seed(123)
+k_clusters <- kmeans(ai2000_site$ai2000, centers = 3)
+
+ai2000_site$Cluster <- as.factor(k_clusters$cluster)
+ai2000_site <- ai2000_site[,c(1,3)]
+
+#print(ai2000_site)
+
+genomesize_ave3 <- merge(genomesize_ave3, ai2000_site, by="site")
+genomesize_ave4 <- genomesize_ave3[!(genomesize_ave3$site %in% sprintf("S%02d", 14)) ,]
+genomesize_ave4$sampleType <- factor(genomesize_ave4$sampleType, levels=c('rhizosphere soil (Z)', 'bulk soil (B)', 'wild soil (W)'))
+
+df <- NULL
+for (i in unique(genomesize_ave4$site)){
+  result_tmp <- with(genomesize_ave4[genomesize_ave4$site == i,],kruskal(genome_size,sampleType,group=TRUE))
+  df_tmp <- data.frame("site" = rep(i,3), 
+                       "sampleType" = rownames(result_tmp$groups), 
+                       "label" = as.character(result_tmp$groups$groups),
+                       "p" = as.numeric(result_tmp$statistics$p.chisq),
+                       "max" = as.numeric(result_tmp$means[rownames(result_tmp$groups),]$Max))
+                        
+  df <- rbind(df, df_tmp)
+                       }
+
+df$sampleType <- factor(df$sampleType, levels = levels(genomesize_ave4$sampleType))
+df$p <- p.adjust(df$p, method = "fdr")
+
+
+df$label2 = " "
+df[df$p < 0.001, "label2"] = "***"
+df[df$p >= 0.001 & df$p < 0.01, "label2"] <- "**"
+df[df$p >= 0.01 & df$p < 0.05, "label2"] <- "*"
+
+df[df$label2 == " ", "label"] <- " "
+
+
+ai2000_site <- aggregate(ai2000~site,genomesize_ave4,FUN = "mean")
+ai2000_site$ai2000 <- (1/ai2000_site$ai2000)
+ai2000_site <- ai2000_site[order(ai2000_site$ai2000, decreasing = T),]
+
+
+p <- ggplot(genomesize_ave4, aes(x=factor(site, levels=c(ai2000_site$site)), y=genome_size/1000000, fill = sampleType)) +
+  geom_boxplot(width = 0.6, outlier.size = 0.5, position = position_dodge(width = 0.75), alpha = 0.7) +
+  geom_text(data = df,
+            aes(x = factor(site), y =  max / 1e6 + 0.1 , label = label, group = sampleType),
+            position = position_dodge(width = 0.75),
+            vjust = 0, size = 5) +
+  geom_text(data = df,
+            aes(x = factor(site), y = 3.2, label = label2),
+            vjust = 0, size = 5) +
+  scale_fill_manual(name="Type",values = rev(c("#cd1936","#40b3b3","#1445f8")),labels =c(
+    'bulk soil (B)' = "Maizeland\nbulk soil",
+    'rhizosphere soil (Z)' = "Maize\nRhizosphere",
+    'wild soil (W)' = "Wildland\nsoil"
+  )) +
+  labs(x="Site (Aridity increasing →)", y="CWM genome size (Mb)", title="Prokaryotes") +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 20, hjust = 0.5),
+        #axis.title.x = element_text(color = "black", size = 14), 
+        axis.title = element_text(color = "black", size = 16), 
+        axis.text.y = element_text(color = "black", size = 14),
+        axis.text.x = element_text(color = "black", size = 14, angle = 45, hjust = 1),
+        legend.title = element_text(color = "black", size = 16, vjust=2),
+        legend.text = element_text(color = "black", size = 14),
+        legend.key.spacing.y = unit(0.5,"cm"),
+        strip.text = element_text(color = "black",size = 14),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  )
+
+
+print(p)
+
+```

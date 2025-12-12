@@ -1,0 +1,247 @@
+---
+title: "Fig.2d_Prokaryotci differential genus"
+author: "Huanhuan Zhu"
+date: "2025-10-09"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=5.0, fig.width=8.3, warning=FALSE, message=FALSE}
+
+
+#############################Fig.2d_Prokaryotci differential genus##########################
+
+library(dplyr)  # to use count/everything
+library(RColorBrewer)
+library(tidyverse)  # %>%
+library(reshape2)  # melt
+library(patchwork)
+library(ggplot2)
+library(ggh4x)
+library(Maaslin2)
+library(data.table)
+
+rm(list=ls())
+
+setwd("E:/HMME/Metagenome/Result_new/kaiju")
+
+#kaiju_calculation <- function(title, path1){
+
+path <- paste0("E:/HMME/Metagenome/Result_new/kaiju/","all")
+fileNames <- dir(path) 
+filePath <- sapply(fileNames, function(x){paste(path , x, sep= '/')})   
+
+data <- lapply(filePath, function(x){read.csv(x, sep = "\t")})  
+
+data2 <- list()
+data_bac <- list()
+data_euk <- list()
+data2_info <- NULL
+
+
+
+kaiju_bac <- readRDS("kaiju_bac.RDS")
+data2_info <- readRDS("data2_info.RDS")
+
+otu_all1_z <- as.data.frame(t(kaiju_bac[,grepl("TS", colnames(kaiju_bac))]))
+
+metadata <-data.frame("id" = rownames(otu_all1_z), "group" = as.numeric(substr(rownames(otu_all1_z),1,1))) 
+metadata <- column_to_rownames(metadata,"id")
+
+
+rp1 <- readRDS("rp1.RDS")
+colnames(rp1)[1] = "otu"
+
+rp1$type <- "none"
+rp1[rp1$coef > 0.00 & rp1$qval <0.05,]$type <- "Up"
+rp1[rp1$coef <= 0.00 & rp1$qval <0.05,]$type <- "Down"
+rp1[rp1$qval >= 0.05,]$type <- "Stable"
+############
+
+rp1$otu <- as.integer(gsub("X","",rp1$otu))
+rp2 <- left_join(rp1, data2_info, by=c("otu"="taxon_id"))
+
+rp2 <- rp2[rp2$qval <0.05, ]
+
+# family order
+my_function <- function(){
+  otu_all_z<- as.data.frame(kaiju_bac[,grepl("TS", colnames(kaiju_bac))])
+  
+  otu_all_z$otu <- as.integer(rownames(otu_all_z))
+  otu_all_z <- otu_all_z[otu_all_z$otu %in% rp2[rp2$coef > 0,]$otu, ]
+  
+  
+  otu_all_z <- merge(otu_all_z, data2_info[,c("family","taxon_id")], by.x="otu", by.y="taxon_id")
+  otu_all_z1 <- aggregate(.~family,otu_all_z[,2:ncol(otu_all_z)], FUN="sum")
+  otu_all_z1 <- as.data.frame(t(column_to_rownames(otu_all_z1,"family")))
+  otu_all_z1$runningSampleID <- substr(rownames(otu_all_z1), 1, 1)
+  otu_all_z1 <- aggregate(.~runningSampleID,otu_all_z1[,2:ncol(otu_all_z1)], FUN="mean")
+  otu_all_z2_up <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_up <- otu_all_z2_up[otu_all_z2_up$runningSampleID =="6",]
+  otu_all_z2_up <- otu_all_z2_up[otu_all_z2_up$variable != "NA",]
+  otu_all_z2_up1 <- as.character(otu_all_z2_up[order(otu_all_z2_up$value, decreasing = T)[1:10],"variable"])  # [1:10] ä¿æŒå’Œtaxonomyä¸?è‡?
+  
+  
+  otu_all_z<- as.data.frame(kaiju_bac[,grepl("TS", colnames(kaiju_bac))])
+  
+  otu_all_z$otu <- as.integer(rownames(otu_all_z))
+  otu_all_z <- otu_all_z[otu_all_z$otu %in% rp2[rp2$coef < 0,]$otu, ]
+  
+  
+  otu_all_z <- merge(otu_all_z, data2_info[,c("family","taxon_id")], by.x="otu", by.y="taxon_id")
+  otu_all_z1 <- aggregate(.~family,otu_all_z[,2:ncol(otu_all_z)], FUN="sum")
+  otu_all_z1 <- as.data.frame(t(column_to_rownames(otu_all_z1,"family")))
+  otu_all_z1$runningSampleID <- substr(rownames(otu_all_z1), 1, 1)
+  otu_all_z1 <- aggregate(.~runningSampleID,otu_all_z1[,2:ncol(otu_all_z1)], FUN="mean")
+  
+  otu_all_z2_down <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_down <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_down <- otu_all_z2_down[otu_all_z2_down$runningSampleID =="1",]
+  otu_all_z2_down <- otu_all_z2_down[otu_all_z2_down$variable != "NA",]
+  otu_all_z2_down1 <- as.character(otu_all_z2_down[order(otu_all_z2_down$value, decreasing = T)[1:9],"variable"])
+  
+  otu_all_z2_tmp <<- unique(c(otu_all_z2_up1,otu_all_z2_down1))
+  otu_all_z1 <<- reshape2::melt(otu_all_z1, id="runningSampleID")
+  
+}
+
+my_function()
+otu_all_order_family <- otu_all_z2_tmp
+
+# genus
+my_function <- function(){
+  otu_all_z<- as.data.frame(kaiju_bac[,grepl("TS", colnames(kaiju_bac))])
+  
+  otu_all_z$otu <- as.integer(rownames(otu_all_z))
+  otu_all_z <- otu_all_z[otu_all_z$otu %in% rp2[rp2$coef > 0,]$otu, ]
+  
+  
+  otu_all_z <- merge(otu_all_z, data2_info[,c("genus","taxon_id")], by.x="otu", by.y="taxon_id")
+  otu_all_z1 <- aggregate(.~genus,otu_all_z[,2:ncol(otu_all_z)], FUN="sum")
+  otu_all_z1 <- as.data.frame(t(column_to_rownames(otu_all_z1,"genus")))
+  otu_all_z1$runningSampleID <- substr(rownames(otu_all_z1), 1, 1)
+  otu_all_z1 <- aggregate(.~runningSampleID,otu_all_z1[,2:ncol(otu_all_z1)], FUN="mean")
+  otu_all_z2_up <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_up <- otu_all_z2_up[otu_all_z2_up$runningSampleID =="6",]
+  otu_all_z2_up <- otu_all_z2_up[otu_all_z2_up$variable != "NA",]
+  otu_all_z2_up1 <- as.character(otu_all_z2_up[order(otu_all_z2_up$value, decreasing = T),"variable"])
+  
+  
+  otu_all_z<- as.data.frame(kaiju_bac[,grepl("TS", colnames(kaiju_bac))])
+  
+  otu_all_z$otu <- as.integer(rownames(otu_all_z))
+  otu_all_z <- otu_all_z[otu_all_z$otu %in% rp2[rp2$coef < 0,]$otu, ]
+  
+  
+  otu_all_z <- merge(otu_all_z, data2_info[,c("genus","taxon_id")], by.x="otu", by.y="taxon_id")
+  otu_all_z1 <- aggregate(.~genus,otu_all_z[,2:ncol(otu_all_z)], FUN="sum")
+  otu_all_z1 <- as.data.frame(t(column_to_rownames(otu_all_z1,"genus")))
+  otu_all_z1$runningSampleID <- substr(rownames(otu_all_z1), 1, 1)
+  otu_all_z1 <- aggregate(.~runningSampleID,otu_all_z1[,2:ncol(otu_all_z1)], FUN="mean")
+  
+  otu_all_z2_down <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_down <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  otu_all_z2_down <- otu_all_z2_down[otu_all_z2_down$runningSampleID =="1",]
+  otu_all_z2_down <- otu_all_z2_down[otu_all_z2_down$variable != "NA",]
+  otu_all_z2_down1 <- as.character(otu_all_z2_down[order(otu_all_z2_down$value, decreasing = T),"variable"])
+  
+  otu_all_z2_tmp <<- unique(c(otu_all_z2_up1,otu_all_z2_down1))
+  otu_all_z1 <<- reshape2::melt(otu_all_z1, id="runningSampleID")
+  
+}
+
+my_function()
+otu_all_order <- otu_all_z2_tmp
+# unique(otu_all_order$variable)
+
+my_function <- function(){
+  otu_all_z <- as.data.frame(kaiju_bac[,grepl("TS", colnames(kaiju_bac))])
+  otu_all_z <- as.data.frame(apply(otu_all_z, 2, function(x) x / sum(x) * 100))
+  
+  otu_all_z$otu <- as.integer(rownames(otu_all_z))
+  otu_all_z <- otu_all_z[otu_all_z$otu %in% rp2$otu, ]
+  
+  otu_all_z <- merge(otu_all_z, data2_info[,c("genus","taxon_id")], by.x="otu", by.y="taxon_id", all.x = T)
+  otu_all_z1 <- aggregate(.~genus,otu_all_z[,2:ncol(otu_all_z)], FUN="sum")
+  otu_all_z1 <- as.data.frame(t(column_to_rownames(otu_all_z1,"genus")))
+  otu_all_z1$runningSampleID <- substr(rownames(otu_all_z1), 1, 1)
+  otu_all_z1 <- aggregate(.~runningSampleID,otu_all_z1[,2:ncol(otu_all_z1)], FUN="mean")
+  
+  otu_all_z2 <- reshape2::melt(otu_all_z1, id="runningSampleID")
+  
+  order_new1 <- aggregate(value~variable,otu_all_z2, FUN="mean")
+  
+  order_new1 <- order_new1[order(order_new1$value,decreasing = T),]
+  order_new1 <- order_new1[order_new1$variable %in% unique(otu_all_order), ]
+  
+  levels(otu_all_z2$variable) <- c(levels(otu_all_z2$variable), "Others")
+  
+  otu_all_z2[!(otu_all_z2$variable %in% order_new1$variable),]$variable <- "Others"
+  otu_all_z2_tmp <<- otu_all_z2
+}
+
+rp2 <- rp1[rp1$type=="Up", ]
+my_function()
+otu_all_z2_up <- otu_all_z2_tmp
+otu_all_z2_up$type <- "Up"
+
+rp2 <- rp1[rp1$type=="Down", ]
+my_function()
+otu_all_z2_down <- otu_all_z2_tmp
+otu_all_z2_down$type <- "Down"
+
+otu_all_z2_all <- rbind(otu_all_z2_up, otu_all_z2_down)
+
+rp2 <- left_join(rp1, data2_info, by=c("otu"="taxon_id"))
+
+rp2 <- rp2[rp2$qval <0.05, ]
+
+aggregate(coef~genus, rp2[rp2$type == "Up",], FUN = "mean") -> test
+test[test$genus %in% otu_all_order,] -> test2
+test3 <- otu_all_z2_all[otu_all_z2_all$runningSampleID == "6" & otu_all_z2_all$type == "Up" & (otu_all_z2_all$variable %in% test2$genus),]
+
+test4 <- left_join(test2, test3, by=c("genus" = "variable"))
+
+data2_info2 <- data2_info[, c("genus", "family")]
+data2_info2 <- data2_info2[!duplicated(data2_info2$genus),]
+test4 <- left_join(test4, data2_info2, by="genus")
+test4[!(test4$family %in% otu_all_order_family[1:15]),]$family = "Others"
+
+test4_text <- test4[test4$coef > 1 & test4$value >1,]
+
+colors <- c(
+  "#E41A1C",  "#377EB8",  "#4DAF4A",  "#984EA3",
+  "#FF7F00",  "#FFFF33",  "#A65628",  "#F781BF",
+  "#666666",  "#1B9E77",  "#D95F02",  "#6495ED",
+  "#E7298A",  "#66A61E",  "#A6761D",  "gray"
+)
+
+p <- ggplot(test4, aes(x=coef, y=value, color = factor(family, levels = rev(c(otu_all_order_family[1:15], "Others"))))) +
+  geom_point() +
+  geom_point(alpha = 1, size = 3,shape = 19) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "darkgray", size = 0.5) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "darkgray", size = 0.5) +
+  scale_color_manual(name = "Top 15 family", values = rev(colors)) +
+  geom_text(data = test4_text, aes(x = coef + 0.15, y = value, label = genus), 
+            color = "black", size = 8, hjust = 0, fontface = "italic") +
+  theme_bw() +
+  labs(x = "Maaslin2 coefficient", 
+       y = "Relative abundance\n in final generation (%)", 
+       title = "Enriched prokaryotic genus") +
+  theme_bw() +
+  theme(plot.title = element_text(color = "black", size = 30, hjust = 0.5),
+        #axis.title.x = element_text(color = "black", size = 16), 
+        axis.title = element_text(color = "black", size = 26), 
+        axis.text.y = element_text(color = "black", size = 22),
+        axis.text.x = element_text(color = "black", size = 22),
+        legend.title = element_text(color = "black", size = 24),
+        legend.text = element_text(color = "black", size = 20),
+        legend.margin = margin(t = 50),
+        strip.text = element_text(color = "black",size = 26),
+        strip.background =element_rect(fill="lightgrey", size = 0)
+  ) 
+
+# 830 500
+
+print(p)
+
+```

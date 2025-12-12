@@ -1,0 +1,180 @@
+---
+title: "Fig.1d_Analysis of five previous datasets"
+author: "Huanhuan Zhu"
+date: "2025-12-11"
+output: html_document
+---
+
+```{r, fig.align='center', fig.height=6.5, fig.width=9, warning=FALSE, message=FALSE}
+
+library(agricolae)
+library(ggplot2)
+library(ggpubr)
+library(effectsize)
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+rm(list=ls())
+
+
+# Xiang_Global exploration of drought micobes
+setwd("E:/Drought genome size validation/Global drought microbiome")
+gs1 <- read.csv("SraRunTable (5).csv")
+# gs <- gs[gs$Treatment != "M",]
+gs1$Treatment <- factor(gs1$Treatment, levels = c("C","M","S"))
+
+ggplot(gs1, aes(x=Treatment, Average_genome_size3))+
+  geom_point()+
+  facet_wrap(.~Time)
+
+res1 <- wilcox.test(Average_genome_size3 ~ Treatment, data = gs1[gs1$Treatment != "M" ,])
+res1
+
+
+effect_size1 <- effectsize::rank_biserial(Average_genome_size3 ~ Treatment, data = gs1[gs1$Treatment != "M" ,])
+effect_size1
+
+
+# Schmidt_Intermittent water stress
+setwd("E:/Drought genome size validation/Isme_comm-Intermittent water stress/")
+gs2 <- read.csv("SraRunTable (9).csv")
+
+gs2$history <- factor(gs2$history, levels = c("IR","DL"))
+
+ggplot(gs2, aes(x=history, genomesize2))+
+  geom_point()+
+  facet_wrap(.~treatment)
+
+res2 <- wilcox.test(genomesize2 ~ history, data = gs2)
+res2
+
+effect_size2 <- effectsize::rank_biserial(genomesize2 ~ history, data = gs2)
+effect_size2
+
+
+
+# Ginnan_USA grassland
+setwd("E:/Drought genome size validation/grassland/")
+gs3 <- read.csv("SraRunTable (10).csv")
+precipitation <- read.csv("precipitation_kansas_power.csv")
+precipitation2 <- aggregate(annual~region, FUN = "mean", data = precipitation)
+
+gs3 <- left_join(gs3, precipitation2, by=c("geo_loc_name" = "region"))
+gs3$group <- "high"
+gs3[gs3$annual < 800,]$group <- "low"
+gs3$group <- factor(gs3$group, levels = c("high","low"))
+
+
+ggplot(gs3, aes(x=group, y=genomesize2))+
+  geom_point()
+
+res3 <- wilcox.test(genomesize2 ~ group, data = gs3)
+res3
+
+
+effect_size3 <- effectsize::rank_biserial(genomesize2 ~ group, data = gs3)
+effect_size3
+
+
+# Yue_Host
+setwd("E:/Drought genome size validation/Host_genotype/")
+gs4 <- read.csv("SraRunTable (14).csv")
+# gs <- gs[gs$Treatment != "M",]
+gs4$site <- factor(gs4$site, levels = c("SQ","YL"))
+
+
+ggplot(gs4, aes(x=site, y=genomesize2))+
+  geom_point()
+
+
+res4 <- wilcox.test(genomesize2 ~ site, data = gs4)
+res4
+
+effect_size4 <- effectsize::rank_biserial(genomesize2 ~ site, data = gs4)
+effect_size4
+
+
+
+# Xu_Epicon
+setwd("E:/epicon/")
+gs5 <- read.csv("results-combined.csv")
+# gs <- gs[gs$Treatment != "M",]
+
+gs5_1 <- gs5[gs5$timepoint %in% c(4,8,3),]
+gs5_1$treatment2 <- factor(gs5_1$treatment2, levels = c("control","pre_drought"))
+
+ggplot(gs5_1[gs5_1$timepoint %in% c(4,8,3),], aes(x=treatment, y=genome_size2/1000000)) +
+geom_point()
+
+
+res5 <- wilcox.test(genome_size2 ~ treatment3, data = gs5_1)
+res5
+
+effect_size5 <- effectsize::rank_biserial(genome_size2 ~ treatment2, data =  gs5_1[gs5_1$timepoint %in% c(4,8,3),])
+effect_size5
+
+
+
+# combined
+
+effect_size_all <- rbind(effect_size1,effect_size2, effect_size3, effect_size4, effect_size5)
+effect_size_all$study <- c(1:5)
+
+wilcox_w <- c(res1$statistic,
+              res2$statistic,
+              res3$statistic,
+              res4$statistic,
+              res5$statistic)
+
+wilcox_p <- c(res1$p.value,
+              res2$p.value,
+              res3$p.value,
+              res4$p.value,
+              res5$p.value)
+
+study_n <- c(16,20,36,12,12)
+
+df <- data.frame(study = 1:5,
+                 x= rep(0,5),
+                 y= c(1:5),
+             label = sprintf("n == '%d' * ',' ~ italic(W) == '%d' * ',' ~ italic(p) == '%s'", 
+                             study_n,
+                             wilcox_w, 
+                             formatC(wilcox_p, digits = 3, format = "fg", flag = "#")))
+
+
+effect_size_all$label <- df$label
+effect_size_all$study2 <- as.factor(effect_size_all$study)
+
+
+colors2 <- c(
+  "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00",
+  "#FFFF33", "#A65628", "#F781BF", "#666666", "#1B9E77",
+  "#D95F02", "#6495ED", "#E7298A", "#66A61E", "#A6761D",
+  "#20B2AA", "#8B0000", "#FFD700", "#00CED1", "#8A2BE2",
+  "#00FF7F", "#00BFFF", "#708090"
+)
+
+# tree plot
+p <- ggplot(effect_size_all, aes(y = study2, x = -r_rank_biserial, xmin = -CI_low, xmax = -CI_high)) +
+  geom_pointrange(aes(color = factor(study2)), size=1, linewidth = 1) + 
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray") + 
+  scale_color_manual(values = colors2, guide = "none") +
+  geom_text(aes(x=-0.2,y=study+0.3, label = label), parse = T, size = 6.5) +
+  labs(y = NULL, x = "Rank-Biserial correlation", title = "Prokaryotes") +
+  xlim(-1,1) +
+  scale_y_discrete(    labels = c("1" = expression("Xiang"~italic("et al.")),
+                                  "2" = expression("Schmidt"~italic("et al.")),
+                                  "3" = expression("Ginnan"~italic("et al.")),
+                                  "4" = expression("Yue"~italic("et al.")),
+                                  "5" = expression("Xu"~italic("et al.")))) +
+  theme_bw() +
+  theme(
+        plot.title = element_text(size=30, hjust = 0.5),
+        axis.title = element_text(size = 26),
+        axis.text = element_text(color = "black", size=22))
+
+print(p)
+# 600 475
+# 900 650
+```

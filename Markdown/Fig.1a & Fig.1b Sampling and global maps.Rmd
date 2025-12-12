@@ -1,0 +1,203 @@
+---
+title: "Fig.1a & Fig.1b Sampling and global maps"
+author: "Huanhuan Zhu"
+date: "2025-12-11"
+output: html_document
+---
+
+## Fig.1a Sampling map in field survey
+```{r, fig.align='center', fig.height=6, fig.width=8.5, warning=FALSE, message=FALSE}
+
+
+library(RColorBrewer)
+library(cowplot)
+library(colorRamps)
+library(ggrepel)
+library(sf)
+library(ggspatial)
+library(tidyterra)
+library(ggnewscale)
+library(terra)
+
+rm(list=ls())
+
+
+# aridity level of china
+setwd("E:/Functrait/Result/site")
+
+china <- st_read("China.json")
+ai <- rast("D:/ArcGIS-Data/7504448/Global-AI_ET0_v3_annual/ai_v3_yr.tif")
+
+china_proj <- st_transform(china, crs(ai))
+china_vect <- vect(china_proj)
+
+ai_china <- crop(ai, china_vect)
+ai_china_masked <- mask(ai_china, china_vect)
+ai_china_masked <- 1- (ai_china_masked*0.0001)
+
+
+breaks <- seq(-1, 1,by=0.5) 
+
+colors <- adjustcolor(
+  c(colorRampPalette(rev(c(
+    "#BD0026", "#E31A1C",
+    "#ff8081", "#ff9585", 
+    "#ffad7c", "#fec37d",
+    "#fed67e", "#fcde7e", 
+    "#fae77e", "#f6f082",
+    "#deee83", "#c0dd9b", "#a9d691", "#9dd27a",
+    "#8bce6d", "#82d390", "#7bd9c9", "#73deff",
+    "#74c9ff", "#72b5ff", "#51a1ff", "#2c87fc",
+    "#0072fd", "#225EA8", "#253494", "#081D58"
+  )))(51)),
+  alpha.f = 0.8
+)
+
+colors2 <- c(
+  "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00",
+  "#FFFF33", "#A65628", "#F781BF", "#666666", "#1B9E77",
+  "#D95F02", "#6495ED", "#E7298A", "#66A61E", "#A6761D",
+  "#20B2AA", "#8B0000", "#FFD700", "#00CED1", "#8A2BE2",
+  "#00FF7F", "#00BFFF", "#708090"
+)
+
+# fileld samling map
+site <- read.csv("site information.csv",header = T)
+site.functraits <- read.csv("../metadata/metadata.csv")
+site.functraits1 <- aggregate(.~site,site.functraits[,c("site", "longtitude", "latitude")], FUN = "mean")
+
+site.functraits1 <- st_as_sf(site.functraits1,coords=c("longtitude","latitude"),crs=4326)
+
+mapCN <- ggplot() + 
+  geom_spatraster(data = ai_china_masked) +
+  scale_fill_gradientn(
+    colors = colors,
+    na.value = "transparent",
+    breaks = c(-1,0,1),
+    limits = range(breaks),
+    oob = scales::squish,
+    name = "Aridity",
+    guide = guide_colorbar(
+      barwidth = unit(0.4, "cm"),  
+      barheight = unit(1.7, "cm"), 
+      order = 1,
+      direction = "vertical"
+    )
+  ) +
+  new_scale_fill() +
+  geom_sf(data = china,fill="NA",color="black",size=0.3) + 
+  #geom_sf(data = nine_line,color="black",size=0.5) + 
+  scale_size(range = c(1,5))+
+  annotation_scale(location = "bl",line_width = 2,text_cex = 1.5) +
+  annotation_north_arrow(location = "tl", which_north = "true",
+                         height = unit(1.5, "cm"), 
+                         width = unit(1.5, "cm"),
+                         style = north_arrow_fancy_orienteering)+
+  geom_sf(data=site.functraits1,aes(fill=site),size=6, alpha=1, shape = 21)+
+  scale_fill_manual(name="Site", values = colors2,guide = guide_legend(ncol = 1, override.aes = list(size = 4))) +
+  guides(fill = guide_legend(override.aes = list(size = 6), ncol = 8, nrow = 3, direction = "vertical"))+
+  coord_sf(ylim = c(-567082,454989),xlim = c(-956175.2,1056095),crs = "+proj=laea +lat_0=40 +lon_0=104")+
+  theme_bw()+xlab("Longitude")+ylab("Latitude")+
+  theme(plot.margin=unit(c(10,10,10,10),"mm"),
+        legend.title = element_text(size = 20, hjust = 0.5),
+        legend.text = element_text(size = 16), # ,margin = margin(t = 10,unit = "pt")
+        legend.key.size = unit(1, "lines"),         # legend key height
+        legend.spacing.y = unit(0,"cm"), 
+        legend.position = "bottom",
+        legend.margin = margin(t = -10, unit = "pt"),
+        legend.background = element_rect(fill = NA, color = NA),
+        legend.box.background = element_rect(fill = NA, color = NA, size = 0.1),
+        axis.text = element_text(size = 20,colour = "black",face = "bold"),
+        #axis.title = element_text(size = 20,colour = "black",face = "bold"),
+        axis.title = element_blank())
+
+print(mapCN)
+
+# 850 600
+```
+
+
+## Fig.1b Global map of five previous studies
+```{r, fig.align='center', fig.height=6, fig.width=8.5, warning=FALSE, message=FALSE}
+
+global <- st_read("E:/Drought genome size validation/map_json/custom.geo (2).json")
+
+# fileld samling map
+site2 <- read.csv("E:/Drought genome size validation/Metadata.csv",header = T)
+
+site2.functraits1 <- st_as_sf(site2,coords=c("Lon","Lat"),crs=4326)
+#site.functraits1$name <- "Survey sites"
+#site.functraits1 <- site.functraits1[,2:3]
+
+
+# ai_low_res <- aggregate(ai, fact = 2)  # 'fact' 表示聚合因子
+# ai_low_res <- 1- (ai_low_res*0.0001)
+# 
+# plot(ai_low_res, main = "Lower Resolution Raster")
+
+global_proj <- st_transform(global, crs(ai))
+global_vect <- vect(global_proj)
+
+# ai_global <- crop(ai, global_vect)
+# ai_global_masked <- mask(ai_global, global_vect)
+# 
+# ai_global_masked <- 1- (ai_global_masked*0.0001)
+# 
+# writeRaster(ai_global, "D:/database/ai_global_map/ai_global.tif", overwrite=TRUE)
+# writeRaster(ai_global_masked, "D:/database/ai_global_map/ai_global_masked.tif",  overwrite=TRUE)
+
+ai_global2        <- rast("D:/database/ai_global_map/ai_global.tif")
+ai_global_masked2 <- rast("D:/database/ai_global_map/ai_global_masked.tif")
+
+p <- ggplot() + 
+  geom_spatraster(data = ai_global_masked2) +
+  scale_fill_gradientn(
+    colors = colors,
+    na.value = "transparent",
+    breaks = c(-1,0,1),
+    limits = range(breaks),
+    oob = scales::squish,
+    name = "Aridity",
+    guide = guide_colorbar(
+      barwidth = unit(0.4, "cm"),  
+      barheight = unit(1.7, "cm"), 
+      order = 1,
+      direction = "vertical"
+    )
+  ) +
+  new_scale_fill() +
+  geom_sf(data = global,fill="NA",color="black",size=0.3) +
+  annotation_north_arrow(location = "tl", which_north = "true",
+                         pad_y = unit(2.5, "cm"),
+                         height = unit(1.5, "cm"), 
+                         width = unit(1.5, "cm"),
+                         style = north_arrow_fancy_orienteering)+
+  geom_sf(data=site2.functraits1,aes(fill=Number),size=4, alpha=1, shape = 21)+
+  scale_fill_manual(name="Study", values = colors2,
+                    labels = c("Study1" = expression("Xiang"~italic("et al.")),
+                               "Study2" = expression("Schmidt"~italic("et al.")),
+                               "Study3" = expression("Ginnan"~italic("et al.")),
+                               "Study4" = expression("Yue"~italic("et al.")),
+                               "Study5" = expression("Xu"~italic("et al."))),
+                    guide = guide_legend(ncol = 1, override.aes = list(size = 4))) +
+  coord_sf(ylim = c(-88.99893  ,86.99893 ),xlim = c(-173,173),crs = "+proj=latlong +datum=WGS84")+
+  guides(fill = guide_legend(override.aes = list(size = 6), ncol = 3, nrow = 2, direction = "vertical"))+
+  theme_bw()+xlab("Longitude")+ylab("Latitude")+
+  theme(plot.margin=unit(c(10,10,10,10),"mm"),
+        #legend.position = "none",
+        #legend.position = c(0.9340, 0.7005), 
+        legend.title = element_text(size = 20, hjust = 0.5),
+        legend.text = element_text(size = 16), # ,margin = margin(t = 10,unit = "pt")
+        legend.key.size = unit(1, "lines"),         # legend key height
+        legend.spacing.y = unit(0,"cm"), 
+        legend.position = "bottom",
+        legend.margin = margin(t = -10, unit = "pt"),
+        legend.background = element_rect(fill = NA, color = NA),
+        legend.box.background = element_rect(fill = NA, color = NA, size = 0.1),
+        axis.text = element_text(size = 20,colour = "black",face = "bold"),
+        #axis.title = element_text(size = 20,colour = "black",face = "bold"),
+        axis.title = element_blank())
+
+print(p)
+
+```
